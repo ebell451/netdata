@@ -1,6 +1,87 @@
 # Netdata daemon
 
+## Starting netdata
 
+- You can start netdata by executing it with `/usr/sbin/netdata` (the installer will also start it).
+
+- You can stop netdata by killing it with `killall netdata`.
+    You can stop and start netdata at any point. Netdata saves on exit its round robbin
+    database to `/var/cache/netdata` so that it will continue from where it stopped the last time.
+
+Access to the web site, for all graphs, is by default on port `19999`, so go to:
+
+ ```
+ http://127.0.0.1:19999/
+ ```
+
+You can get the running config file at any time, by accessing `http://127.0.0.1:19999/netdata.conf`.
+
+### Starting netdata at boot
+
+In the `system` directory you can find scripts and configurations for the various distros.
+
+#### systemd
+
+The installer already installs `netdata.service` if it detects a systemd system.
+
+To install `netdata.service` by hand, run:
+
+```sh
+# stop netdata
+killall netdata
+
+# copy netdata.service to systemd
+cp system/netdata.service /etc/systemd/system/
+
+# let systemd know there is a new service
+systemctl daemon-reload
+
+# enable netdata at boot
+systemctl enable netdata
+
+# start netdata
+systemctl start netdata
+```
+
+#### init.d
+
+In the system directory you can find `netdata-lsb`. Copy it to the proper place according to your distribution documentation. For Ubuntu, this can be done via running the following commands as root.
+
+```sh
+# copy the netdata startup file to /etc/init.d
+cp system/netdata-lsb /etc/init.d/netdata
+
+# make sure it is executable
+chmod +x /etc/init.d/netdata
+
+# enable it
+update-rc.d netdata defaults
+```
+
+#### openrc (gentoo)
+
+In the `system` directory you can find `netdata-openrc`. Copy it to the proper place according to your distribution documentation.
+
+#### CentOS / Red Hat Enterprise Linux
+
+For older versions of RHEL/CentOS that don't have systemd, an init script is included in the system directory. This can be installed by running the following commands as root.
+
+```sh
+# copy the netdata startup file to /etc/init.d
+cp system/netdata-init-d /etc/init.d/netdata
+
+# make sure it is executable
+chmod +x /etc/init.d/netdata
+
+# enable it
+chkconfig --add netdata
+```
+
+_There have been some recent work on the init script, see PR https://github.com/netdata/netdata/pull/403_
+
+#### other systems
+
+You can start netdata by running it from `/etc/rc.local` or equivalent.
 
 ## Command line options
 
@@ -32,7 +113,7 @@ The command line options of the netdata 1.10.0 version are the following:
  Source Code: https://github.com/netdata/netdata
  Wiki / Docs: https://github.com/netdata/netdata/wiki
  Support    : https://github.com/netdata/netdata/issues
- License    : https://github.com/netdata/netdata/blob/master/LICENSE.md
+ License    : https://github.com/netdata/netdata/blob/master/LICENSE
 
  Twitter    : https://twitter.com/linuxnetdata
  Facebook   : https://www.facebook.com/linuxnetdata/
@@ -208,7 +289,7 @@ If you want to control it entirely via systemd, you can set in `netdata.conf`:
 Using the above, whatever OOM Score you have set at `netdata.service` will be maintained by netdata.
 
 
-## netdata process scheduling policy
+## Netdata process scheduling policy
 
 By default netdata runs with the `idle` process scheduling policy, so that it uses CPU resources, only when there is idle CPU to spare. On very busy servers (or weak servers), this can lead to gaps on the charts.
 
@@ -328,20 +409,17 @@ sudo systemctl daemon-reload
 sudo systemctl restart netdata
 ```
 
-## virtual memory
+## Virtual memory
 
-You may notice that netdata's virtual memory size, as reported by `ps` or `/proc/pid/status`
-(or even netdata's applications virtual memory chart)  is unrealistically high.
+You may notice that netdata's virtual memory size, as reported by `ps` or `/proc/pid/status` (or even netdata's applications virtual memory chart) is unrealistically high.
 
-For example, it may be reported to be 150+MB, even if the resident memory size is just 25MB.
-Similar values may be reported for netdata plugins too.
+For example, it may be reported to be 150+MB, even if the resident memory size is just 25MB. Similar values may be reported for netdata plugins too.
 
-Check this for example: A netdata installation with default settings on Ubuntu 16.04LTS.
-The top chart is **real memory used**, while the bottom one is **virtual memory**:
+Check this for example: A netdata installation with default settings on Ubuntu 16.04LTS. The top chart is **real memory used**, while the bottom one is **virtual memory**:
 
 ![image](https://cloud.githubusercontent.com/assets/2662304/19013772/5eb7173e-87e3-11e6-8f2b-a2ccfeb06faf.png)
 
-#### why this happens?
+**Why does this happen?**
 
 The system memory allocator allocates virtual memory arenas, per thread running.
 On Linux systems this defaults to 16MB per thread on 64 bit machines. So, if you get the
@@ -356,21 +434,16 @@ linux (that uses **musl** instead of **glibc**) is this:
 
 ![image](https://cloud.githubusercontent.com/assets/2662304/19013807/7cf5878e-87e4-11e6-9651-082e68701eab.png)
 
-#### can we do anything to lower it?
+**Can we do anything to lower it?**
 
-Since netdata already uses minimal memory allocations while it runs (i.e. it adapts its memory
-on start, so that while repeatedly collects data it does not do memory allocations), it already
-instructs the system memory allocator to minimize the memory arenas for each thread. We have also
-added [2 configuration options](https://github.com/netdata/netdata/blob/5645b1ee35248d94e6931b64a8688f7f0d865ec6/src/main.c#L410-L418)
-to allow you tweak these settings.
+Since netdata already uses minimal memory allocations while it runs (i.e. it adapts its memory on start, so that while repeatedly collects data it does not do memory allocations), it already instructs the system memory allocator to minimize the memory arenas for each thread. We have also added [2 configuration options](https://github.com/netdata/netdata/blob/5645b1ee35248d94e6931b64a8688f7f0d865ec6/src/main.c#L410-L418)
+to allow you tweak these settings: `glibc malloc arena max for plugins` and `glibc malloc arena max for netdata`.
 
-However, even if we instructed the memory allocator to use just one arena, it seems it allocates
-an arena per thread.
+However, even if we instructed the memory allocator to use just one arena, it seems it allocates an arena per thread.
 
-netdata also supports `jemalloc` and `tcmalloc`, however both behave exactly the same to the
-glibc memory allocator in this aspect.
+netdata also supports `jemalloc` and `tcmalloc`, however both behave exactly the same to the glibc memory allocator in this aspect.
 
-#### Is this a problem?
+**Is this a problem?**
 
 No, it is not.
 
@@ -387,7 +460,7 @@ When you compile netdata with debugging:
 
 1. compiler optimizations for your CPU are disabled (netdata will run somewhat slower)
 
-2. a lot of code is added all over netdata, to log debug messages to `/var/log/netdata/debug.log`. However, nothing is printed by default. netdata allows you to select which sections of netdata you want to trace. Tracing is activated via the config option `debug flags`. It accepts a hex number, to enable or disable specific sections. You can find the options supported at [log.h](https://github.com/netdata/netdata/blob/master/libnetdata/log/log.h). They are the `D_*` defines. The value `0xffffffffffffffff` will enable all possible debug flags.
+2. a lot of code is added all over netdata, to log debug messages to `/var/log/netdata/debug.log`. However, nothing is printed by default. netdata allows you to select which sections of netdata you want to trace. Tracing is activated via the config option `debug flags`. It accepts a hex number, to enable or disable specific sections. You can find the options supported at [log.h](../libnetdata/log/log.h). They are the `D_*` defines. The value `0xffffffffffffffff` will enable all possible debug flags.
 
 Once netdata is compiled with debugging and tracing is enabled for a few sections, the file `/var/log/netdata/debug.log` will contain the messages.
 
@@ -443,3 +516,5 @@ valgrind $(which netdata) -D
 
 netdata will start and it will be a lot slower. Now reproduce the crash and `valgrind` will dump on your console the stack trace. Open a new github issue and post the output.
 
+
+[![analytics](https://www.google-analytics.com/collect?v=1&aip=1&t=pageview&_s=1&ds=github&dr=https%3A%2F%2Fgithub.com%2Fnetdata%2Fnetdata&dl=https%3A%2F%2Fmy-netdata.io%2Fgithub%2Fdaemon%2FREADME&_u=MAC~&cid=5792dfd7-8dc4-476b-af31-da2fdb9f93d2&tid=UA-64295674-3)]()

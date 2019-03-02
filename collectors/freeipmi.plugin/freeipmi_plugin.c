@@ -28,11 +28,32 @@
 
 #ifdef HAVE_FREEIPMI
 
+#define IPMI_PARSE_DEVICE_LAN_STR       "lan"
+#define IPMI_PARSE_DEVICE_LAN_2_0_STR   "lan_2_0"
+#define IPMI_PARSE_DEVICE_LAN_2_0_STR2  "lan20"
+#define IPMI_PARSE_DEVICE_LAN_2_0_STR3  "lan_20"
+#define IPMI_PARSE_DEVICE_LAN_2_0_STR4  "lan2_0"
+#define IPMI_PARSE_DEVICE_LAN_2_0_STR5  "lanplus"
+#define IPMI_PARSE_DEVICE_KCS_STR       "kcs"
+#define IPMI_PARSE_DEVICE_SSIF_STR      "ssif"
+#define IPMI_PARSE_DEVICE_OPENIPMI_STR  "openipmi"
+#define IPMI_PARSE_DEVICE_OPENIPMI_STR2 "open"
+#define IPMI_PARSE_DEVICE_SUNBMC_STR    "sunbmc"
+#define IPMI_PARSE_DEVICE_SUNBMC_STR2   "bmc"
+#define IPMI_PARSE_DEVICE_INTELDCMI_STR "inteldcmi"
+
 // ----------------------------------------------------------------------------
 
 // callback required by fatal()
 void netdata_cleanup_and_exit(int ret) {
     exit(ret);
+}
+
+void send_statistics( const char *action, const char *action_result, const char *action_data) {
+    (void)action;
+    (void)action_result;
+    (void)action_data;
+    return;
 }
 
 // callbacks required by popen()
@@ -102,11 +123,11 @@ char *sensor_config_file = NULL;
  * - See ipmi_monitoring.h for descriptions of these flags.
  */
 int reread_sdr_cache = 0;
-int ignore_non_interpretable_sensors = 1;
+int ignore_non_interpretable_sensors = 0;
 int bridge_sensors = 0;
 int interpret_oem_data = 0;
 int shared_sensors = 0;
-int discrete_reading = 0;
+int discrete_reading = 1;
 int ignore_scanning_disabled = 0;
 int assume_bmc_owner = 0;
 int entity_sensor_names = 0;
@@ -321,7 +342,7 @@ static void send_chart_to_netdata_for_units(int units) {
 
     switch(units) {
         case IPMI_MONITORING_SENSOR_UNITS_CELSIUS:
-            printf("CHART ipmi.temperatures_c '' 'System Celcius Temperatures read by IPMI' 'Celcius' 'temperatures' 'ipmi.temperatures_c' 'line' %d %d\n"
+            printf("CHART ipmi.temperatures_c '' 'System Celsius Temperatures read by IPMI' 'Celsius' 'temperatures' 'ipmi.temperatures_c' 'line' %d %d\n"
                    , netdata_priority + 10
                    , netdata_update_every
             );
@@ -665,10 +686,13 @@ static void netdata_get_sensor(
 
     if(!sn) {
         // not found, create it
-
         // check if it is excluded
-        if(excluded_record_ids_check(record_id))
+        if(excluded_record_ids_check(record_id)) {
+            if(debug) fprintf(stderr, "Sensor '%s' is excluded by excluded_record_ids_check()\n", sensor_name);
             return;
+        }
+
+        if(debug) fprintf(stderr, "Allocating new sensor data record for sensor '%s', id %d, number %d, type %d, state %d, units %d, reading_type %d\n", sensor_name, record_id, sensor_number, sensor_type, sensor_state, sensor_units, sensor_reading_type);
 
         sn = calloc(1, sizeof(struct sensor));
         if(!sn) {
@@ -688,6 +712,9 @@ static void netdata_get_sensor(
 
         sn->next = sensors_root;
         sensors_root = sn;
+    }
+    else {
+        if(debug) fprintf(stderr, "Reusing sensor record for sensor '%s', id %d, number %d, type %d, state %d, units %d, reading_type %d\n", sensor_name, record_id, sensor_number, sensor_type, sensor_state, sensor_units, sensor_reading_type);
     }
 
     switch(sensor_reading_type) {
@@ -710,13 +737,16 @@ static void netdata_get_sensor(
             break;
 
         default:
+            if(debug) fprintf(stderr, "Unknown reading type - Ignoring sensor record for sensor '%s', id %d, number %d, type %d, state %d, units %d, reading_type %d\n", sensor_name, record_id, sensor_number, sensor_type, sensor_state, sensor_units, sensor_reading_type);
             sn->ignore = 1;
             break;
     }
 
     // check if it is excluded
-    if(excluded_status_record_ids_check(record_id))
+    if(excluded_status_record_ids_check(record_id)) {
+        if(debug) fprintf(stderr, "Sensor '%s' is excluded for status check, by excluded_status_record_ids_check()\n", sensor_name);
         return;
+    }
 
     switch(sensor_state) {
         case IPMI_MONITORING_STATE_NOMINAL:
@@ -963,12 +993,13 @@ _ipmimonitoring_sensors (struct ipmi_monitoring_ipmi_config *ipmi_config)
             goto cleanup;
         }
 
-        if (!(sensor_bitmask_strings = ipmi_monitoring_sensor_read_sensor_bitmask_strings (ctx)))
-        {
-            error( "ipmi_monitoring_sensor_read_sensor_bitmask_strings(): %s",
-                    ipmi_monitoring_ctx_errormsg (ctx));
-            goto cleanup;
-        }
+         /* it's ok for this to be NULL, i.e. sensor_bitmask ==
+          * IPMI_MONITORING_SENSOR_BITMASK_TYPE_UNKNOWN
+          */
+        sensor_bitmask_strings = ipmi_monitoring_sensor_read_sensor_bitmask_strings (ctx);
+        
+        
+        
 #endif // NETDATA_COMMENTED
 
         if ((sensor_reading_type = ipmi_monitoring_sensor_read_sensor_reading_type (ctx)) < 0)
@@ -1075,7 +1106,8 @@ _ipmimonitoring_sensors (struct ipmi_monitoring_ipmi_config *ipmi_config)
         else
             printf (", N/A");
 
-        if (sensor_bitmask_type != IPMI_MONITORING_SENSOR_BITMASK_TYPE_UNKNOWN)
+        if (sensor_bitmask_type != IPMI_MONITORING_SENSOR_BITMASK_TYPE_UNKNOWN
+            && sensor_bitmask_strings)
         {
             unsigned int i = 0;
 
@@ -1530,6 +1562,49 @@ int ipmi_detect_speed_secs(struct ipmi_monitoring_ipmi_config *ipmi_config) {
     return (int)(( total * 2 / checks / 1000000 ) + 1);
 }
 
+int parse_inband_driver_type (const char *str)
+{
+    assert (str);
+
+    if (strcasecmp (str, IPMI_PARSE_DEVICE_KCS_STR) == 0)
+        return (IPMI_MONITORING_DRIVER_TYPE_KCS);
+    else if (strcasecmp (str, IPMI_PARSE_DEVICE_SSIF_STR) == 0)
+        return (IPMI_MONITORING_DRIVER_TYPE_SSIF);
+        /* support "open" for those that might be used to
+		 * ipmitool.
+		 */
+    else if (strcasecmp (str, IPMI_PARSE_DEVICE_OPENIPMI_STR) == 0
+             || strcasecmp (str, IPMI_PARSE_DEVICE_OPENIPMI_STR2) == 0)
+        return (IPMI_MONITORING_DRIVER_TYPE_OPENIPMI);
+        /* support "bmc" for those that might be used to
+		 * ipmitool.
+		 */
+    else if (strcasecmp (str, IPMI_PARSE_DEVICE_SUNBMC_STR) == 0
+             || strcasecmp (str, IPMI_PARSE_DEVICE_SUNBMC_STR2) == 0)
+        return (IPMI_MONITORING_DRIVER_TYPE_SUNBMC);
+
+    return (-1);
+}
+
+int parse_outofband_driver_type (const char *str)
+{
+    assert (str);
+
+    if (strcasecmp (str, IPMI_PARSE_DEVICE_LAN_STR) == 0)
+        return (IPMI_MONITORING_PROTOCOL_VERSION_1_5);
+        /* support "lanplus" for those that might be used to ipmitool.
+		 * support typo variants to ease.
+		 */
+    else if (strcasecmp (str, IPMI_PARSE_DEVICE_LAN_2_0_STR) == 0
+             || strcasecmp (str, IPMI_PARSE_DEVICE_LAN_2_0_STR2) == 0
+             || strcasecmp (str, IPMI_PARSE_DEVICE_LAN_2_0_STR3) == 0
+             || strcasecmp (str, IPMI_PARSE_DEVICE_LAN_2_0_STR4) == 0
+             || strcasecmp (str, IPMI_PARSE_DEVICE_LAN_2_0_STR5) == 0)
+        return (IPMI_MONITORING_PROTOCOL_VERSION_2_0);
+
+    return (-1);
+}
+
 int main (int argc, char **argv) {
 
     // ------------------------------------------------------------------------
@@ -1600,6 +1675,12 @@ int main (int argc, char **argv) {
                     "  password PASS           connect to remote IPMI host\n"
                     "                          default: local IPMI processor\n"
                     "\n"
+                    " driver-type IPMIDRIVER\n"
+                    "                          Specify the driver type to use instead of doing an auto selection. \n"
+                    "                          The currently available outofband drivers are LAN and  LAN_2_0,\n"
+                    "                          which  perform  IPMI  1.5  and  IPMI  2.0 respectively. \n"
+                    "                          The currently available inband drivers are KCS, SSIF, OPENIPMI and SUNBMC.\n"
+                    "\n"
                     "  sdr-cache-dir PATH      directory for SDR cache files\n"
                     "                          default: %s\n"
                     "\n"
@@ -1624,7 +1705,7 @@ int main (int argc, char **argv) {
                     " options ipmi_si kipmid_max_busy_us=10\n"
                     "\n"
                     " For more information:\n"
-                    " https://github.com/ktsaou/netdata/tree/master/plugins/freeipmi.plugin\n"
+                    " https://github.com/netdata/netdata/tree/master/collectors/freeipmi.plugin\n"
                     "\n"
                     , VERSION
                     , netdata_update_every
@@ -1656,6 +1737,17 @@ int main (int argc, char **argv) {
             // mask it be hidden from the process tree
             while(*s) *s++ = 'x';
             if(debug) fprintf(stderr, "freeipmi.plugin: password set to '%s'\n", password);
+            continue;
+        }
+        else if(strcmp("driver-type", argv[i]) == 0) {
+            if (hostname) {
+                protocol_version=parse_outofband_driver_type(argv[++i]);
+                if(debug) fprintf(stderr, "freeipmi.plugin: outband protocol version set to '%d'\n", protocol_version);
+            }
+            else {
+                driver_type=parse_inband_driver_type(argv[++i]);
+                if(debug) fprintf(stderr, "freeipmi.plugin: inband driver type set to '%d'\n", driver_type);
+            }
             continue;
         }
         else if(i < argc && strcmp("sdr-cache-dir", argv[i]) == 0) {

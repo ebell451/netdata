@@ -18,7 +18,7 @@ if (typeof netdataIcons === 'object') {
     //     if (NETDATA.icons.hasOwnProperty(icon) && typeof(netdataIcons[icon]) === 'string')
     //         NETDATA.icons[icon] = netdataIcons[icon];
     // }
-    for (const icon of Object.keys(NETDATA.icons)) {
+    for (var icon of Object.keys(NETDATA.icons)) {
         if (typeof(netdataIcons[icon]) === 'string') {
             NETDATA.icons[icon] = netdataIcons[icon]
         }
@@ -38,7 +38,7 @@ if (typeof netdataShowAlarms === 'undefined') {
 }
 
 if (typeof netdataRegistryAfterMs !== 'number' || netdataRegistryAfterMs < 0) {
-    netdataRegistryAfterMs = 1500;
+    netdataRegistryAfterMs = 0; // 1500;
 }
 
 if (typeof netdataRegistry === 'undefined') {

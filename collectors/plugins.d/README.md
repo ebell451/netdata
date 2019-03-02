@@ -1,4 +1,4 @@
-# Netdata External Plugins
+# External plugins overview
 
 `plugins.d` is the netdata internal plugin that collects metrics
 from external processes, thus allowing netdata to use **external plugins**.
@@ -9,12 +9,14 @@ plugin|language|O/S|description
 :---:|:---:|:---:|:---
 [apps.plugin](../apps.plugin/)|`C`|linux, freebsd|monitors the whole process tree on Linux and FreeBSD and breaks down system resource usage by **process**, **user** and **user group**.
 [charts.d.plugin](../charts.d.plugin/)|`BASH`|all|a **plugin orchestrator** for data collection modules written in `BASH` v4+.
+[cups.plugin](../cups.plugin/)|`C`|all|monitors **CUPS**
 [fping.plugin](../fping.plugin/)|`C`|all|measures network latency, jitter and packet loss between the monitored node and any number of remote network end points.
 [freeipmi.plugin](../freeipmi.plugin/)|`C`|linux|collects metrics from enterprise hardware sensors, on Linux servers.
+[nfacct.plugin](../nfacct.plugin/)|`C`|linux|collects netfilter firewall, connection tracker and accounting metrics using `libmnl` and `libnetfilter_acct`.
 [node.d.plugin](../node.d.plugin/)|`node.js`|all|a **plugin orchestrator** for data collection modules written in `node.js`.
 [python.d.plugin](../python.d.plugin/)|`python`|all|a **plugin orchestrator** for data collection modules written in `python` v2 or v3 (both are supported).
 
-Plugin orchestrators may also be described as **modular plugins**. They are modular since they accept custom made modules to be included. Writing modules for these plugins is easier than accessing the native netdata API directly. You will find modules already available for each orchestrator under the directory of the particular modular plugin (e.g. under python.d.plugin for the python orchestrator). 
+Plugin orchestrators may also be described as **modular plugins**. They are modular since they accept custom made modules to be included. Writing modules for these plugins is easier than accessing the native netdata API directly. You will find modules already available for each orchestrator under the directory of the particular modular plugin (e.g. under python.d.plugin for the python orchestrator).
 Each of these modular plugins has each own methods for defining modules. Please check the examples and their documentation.
 
 ## Motivation
@@ -48,9 +50,9 @@ Plugins can create any number of charts with any number of dimensions each. Each
 
 ## Configuration
 
-Netdata will supply the environment variables `NETDATA_USER_CONFIG_DIR` (for user supplied) and `NETDATA_STOCK_CONFIG_DIR` (for netdata supplied) configuration files to identify the directory where configuration files are stored. It is up to the plugin to read the configuration it needs. 
+Netdata will supply the environment variables `NETDATA_USER_CONFIG_DIR` (for user supplied) and `NETDATA_STOCK_CONFIG_DIR` (for netdata supplied) configuration files to identify the directory where configuration files are stored. It is up to the plugin to read the configuration it needs.
 
-The `netdata.conf` section [plugins] section contains a list of all the plugins found at the system where netdata runs, with a boolean setting to enable them or not. 
+The `netdata.conf` section [plugins] section contains a list of all the plugins found at the system where netdata runs, with a boolean setting to enable them or not.
 
 Example:
 
@@ -58,7 +60,7 @@ Example:
 [plugins]
 	# enable running new plugins = yes
 	# check for new plugins every = 60
-	
+
 	# charts.d = yes
 	# fping = yes
 	# node.d = yes
@@ -69,7 +71,7 @@ The setting `enable running new plugins` changes the default behavior for all ex
 So if set to `no`, only the plugins that are explicitly set to `yes` will be run.
 
 The setting `check for new plugins every` controls the time the directory `/usr/libexec/netdata/plugins.d`
-will be rescanned for new plugins. So, new plugins can give added anytime. 
+will be rescanned for new plugins. So, new plugins can give added anytime.
 
 For each of the external plugins enabled, another `netdata.conf` section
 is created, in the form of `[plugin:NAME]`, where `NAME` is the name of the external plugin.
@@ -81,14 +83,14 @@ For example, for `apps.plugin` the following section is available:
 ```
 [plugin:apps]
 	# update every = 1
-	# command options = 
+	# command options =
 ```
 
 - `update every` controls the granularity of the external plugin.
 - `command options` allows giving additional command line options to the plugin.
 
 
-Netdata will provide to the extrenal plugins the environment variable `NETDATA_UPDATE_EVERY`, in seconds (the default is 1). This is the **minimum update frequency** for all charts. A plugin that is updating values more frequently than this, is just wasting resources.
+Netdata will provide to the external plugins the environment variable `NETDATA_UPDATE_EVERY`, in seconds (the default is 1). This is the **minimum update frequency** for all charts. A plugin that is updating values more frequently than this, is just wasting resources.
 
 Netdata will call the plugin with just one command line parameter: the number of seconds the user requested this plugin to update its data (by default is also 1).
 
@@ -192,7 +194,7 @@ the template is:
     is used to group charts together
     (for example all eth0 charts should say: eth0),
     if empty or missing, the `id` part of `type.id` will be used
-    
+
     this controls the sub-menu on the dashboard
 
   - `context`
@@ -232,7 +234,7 @@ the template is:
 
 the template is:
 
-> DIMENSION id [name [algorithm [multiplier [divisor [hidden]]]]]
+> DIMENSION id [name [algorithm [multiplier [divisor [options]]]]]
 
  where:
 
@@ -282,10 +284,9 @@ the template is:
     an integer value to divide the collected value,
     if empty or missing, `1` is used
 
-  - `hidden`
+  - `options`
 
-    giving the keyword `hidden` will make this dimension hidden,
-    it will take part in the calculations but will not be presented in the chart
+    a space separated list of options, enclosed in quotes. Options supported: `obsolete` to mark a dimension as obsolete (netdata will delete it after some time) and `hidden` to make this dimension hidden, it will take part in the calculations but will not be presented in the chart.
 
 
 #### VARIABLE
@@ -374,23 +375,21 @@ or do not output the line at all.
 
 ## Modular Plugins
 
-1. **python**, use `python.d.plugin`, there are many examples in the [python.d directory](../python.d.plugin)
+1. **python**, use `python.d.plugin`, there are many examples in the [python.d directory](../python.d.plugin/)
 
    python is ideal for netdata plugins. It is a simple, yet powerful way to collect data, it has a very small memory footprint, although it is not the most CPU efficient way to do it.
 
-2. **node.js**, use `node.d.plugin`, there are a few examples in the [node.d directory](../node.d.plugin)
+2. **node.js**, use `node.d.plugin`, there are a few examples in the [node.d directory](../node.d.plugin/)
 
    node.js is the fastest scripting language for collecting data. If your plugin needs to do a lot of work, compute values, etc, node.js is probably the best choice before moving to compiled code. Keep in mind though that node.js is not memory efficient; it will probably need more RAM compared to python.
 
-3. **BASH**, use `charts.d.plugin`, there are many examples in the [charts.d directory](../charts.d.plugin)
+3. **BASH**, use `charts.d.plugin`, there are many examples in the [charts.d directory](../charts.d.plugin/)
 
    BASH is the simplest scripting language for collecting values. It is the less efficient though in terms of CPU resources. You can use it to collect data quickly, but extensive use of it might use a lot of system resources.
 
 4. **C**
 
    Of course, C is the most efficient way of collecting data. This is why netdata itself is written in C.
-
----
 
 ## Writing Plugins Properly
 
@@ -403,7 +402,7 @@ There are a few rules for writing plugins properly:
       - Initialize everything once, at the beginning. Initialization is not an expensive operation. Your plugin will most probably be started once and run forever. So, do whatever heavy operation is needed at the beginning, just once.
       - Do the absolutely minimum while iterating to collect values repeatedly.
       - If you need to connect to another server to collect values, avoid re-connects if possible. Connect just once, with keep-alive (for HTTP) enabled and collect values using the same connection.
-      - Avoid any CPU or memory heavy operation while collecting data. If you control memory allocation, avoid any memory allocation white iterating to collect values.
+      - Avoid any CPU or memory heavy operation while collecting data. If you control memory allocation, avoid any memory allocation while iterating to collect values.
       - Avoid running external commands when possible. If you are writing shell scripts avoid especially pipes (each pipe is another fork, a very expensive operation).
 
 2. The best way to iterate at a constant pace is this pseudo code:
@@ -412,7 +411,7 @@ There are a few rules for writing plugins properly:
    var update_every = argv[1] * 1000; /* seconds * 1000 = milliseconds */
 
    readConfiguration();
-   
+
    if(!verifyWeCanCollectValues()) {
       print "DISABLE";
       exit(1);
@@ -446,7 +445,7 @@ There are a few rules for writing plugins properly:
            sleepMilliseconds(next_run - now);
            now = currentTimeStampInMilliseconds();
        }
-       
+
        /* calculate the time passed since the last run */
        if ( loops > 0 )
            dt_since_last_run = (now - last_run) * 1000; /* in microseconds */
@@ -470,3 +469,6 @@ There are a few rules for writing plugins properly:
 3. If you are not sure of memory leaks, exit every one hour. Netdata will re-start your process.
 
 4. If possible, try to autodetect if your plugin should be enabled, without any configuration.
+
+
+[![analytics](https://www.google-analytics.com/collect?v=1&aip=1&t=pageview&_s=1&ds=github&dr=https%3A%2F%2Fgithub.com%2Fnetdata%2Fnetdata&dl=https%3A%2F%2Fmy-netdata.io%2Fgithub%2Fcollectors%2Fplugins.d%2FREADME&_u=MAC~&cid=5792dfd7-8dc4-476b-af31-da2fdb9f93d2&tid=UA-64295674-3)]()

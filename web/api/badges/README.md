@@ -20,7 +20,7 @@ Similarly, there is [a chart that shows outbound bandwidth per class](http://lon
 
 The right one is a **volume** calculation. Netdata calculated the total of the last 86.400 seconds (a day) which gives `kilobits`, then divided it by 8 to make it KB, then by 1024 to make it MB and then by 1024 to make it GB. Calculations like this are quite accurate, since for every value collected, every second, netdata interpolates it to second boundary using microsecond calculations.
 
-Let's see a few more badge examples (they come from the [netdata registry](https://github.com/netdata/netdata/wiki/mynetdata-menu-item)):
+Let's see a few more badge examples (they come from the [netdata registry](../../../registry/)):
 
 - **cpu usage of user `root`** (you can pick any user; 100% = 1 core). This will be `green <10%`, `yellow <20%`, `orange <50%`, `blue <100%` (1 core), `red` otherwise (you define thresholds and colors on the URL).
 
@@ -56,14 +56,14 @@ Here is what you can put for `options` (these are standard netdata API options):
 
 ```html
   <a href="#">
-     <img src="http://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu"></img>
+     <img src="https://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu"></img>
   </a>
 ```
 
   Which produces this:
 
   <a href="#">
-     <img src="http://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu"></img>
+     <img src="https://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu"></img>
   </a>
 
 - `alarm=NAME`
@@ -84,14 +84,14 @@ Here is what you can put for `options` (these are standard netdata API options):
 
 ```html
   <a href="#">
-     <img src="http://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&dimensions=system%7Cnice"></img>
+     <img src="https://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&dimensions=system%7Cnice"></img>
   </a>
 ```
 
   Which produces this:
 
   <a href="#">
-     <img src="http://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&dimensions=system%7Cnice"></img>
+     <img src="https://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&dimensions=system%7Cnice"></img>
   </a>
 
 - `before=SECONDS` and `after=SECONDS`
@@ -106,28 +106,28 @@ Here is what you can put for `options` (these are standard netdata API options):
 
 ```html
   <a href="#">
-     <img src="http://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&after=-60"></img>
+     <img src="https://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&after=-60"></img>
   </a>
 ```
 
   Which produces the average of last complete minute (XX:XX:00 - XX:XX:59):
 
   <a href="#">
-     <img src="http://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&after=-60"></img>
+     <img src="https://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&after=-60"></img>
   </a>
 
   While this is the previous minute (one minute before the last one, again aligned XX:XX:00 - XX:XX:59):
 
 ```html
   <a href="#">
-     <img src="http://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&before=-60&after=-60"></img>
+     <img src="https://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&before=-60&after=-60"></img>
   </a>
 ```
 
   It produces this:
   
   <a href="#">
-     <img src="http://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&before=-60&after=-60"></img>
+     <img src="https://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&before=-60&after=-60"></img>
   </a>
 
 - `group=min` or `group=max` or `group=average` (the default) or `group=sum` or `group=incremental-sum`
@@ -208,11 +208,11 @@ These are options dedicated to badges:
 
   This option scales the svg image. It accepts values above or equal to 100 (100% is the default scale). For example, lets get a few different sizes:
 
-     <img src="http://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&after=-60&scale=100"></img> original<br/>
-     <img src="http://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&after=-60&scale=125"></img> `scale=125`<br/>
-     <img src="http://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&after=-60&scale=150"></img> `scale=150`<br/>
-     <img src="http://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&after=-60&scale=175"></img> `scale=175`<br/>
-     <img src="http://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&after=-60&scale=200"></img> `scale=200`
+     <img src="https://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&after=-60&scale=100"></img> original<br/>
+     <img src="https://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&after=-60&scale=125"></img> `scale=125`<br/>
+     <img src="https://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&after=-60&scale=150"></img> `scale=150`<br/>
+     <img src="https://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&after=-60&scale=175"></img> `scale=175`<br/>
+     <img src="https://registry.my-netdata.io/api/v1/badge.svg?chart=system.cpu&after=-60&scale=200"></img> `scale=200`
 
 
 - `refresh=auto` or `refresh=SECONDS`
@@ -243,7 +243,7 @@ These are options dedicated to badges:
 </script>
 ```
 
-A more advanced badges refresh method is to include `http://your.netdata.ip:19999/refresh-badges.js` in your page. For more information and use example, [check this](https://github.com/netdata/netdata/blob/master/web/gui/refresh-badges.js).
+A more advanced badges refresh method is to include `http://your.netdata.ip:19999/refresh-badges.js` in your page. For more information and use example, [check this](../../gui/refresh-badges.js).
 
 ---
 
@@ -260,24 +260,6 @@ character|name|escape sequence
 ` > `|greater than|`%3E`
 ` \ `|backslash (when you need a `/`)|`%5C`
 ` \| `|pipe (delimiting parameters)|`%7C`
-
----
-
-## Using the path instead of the query string
-
-The badges can also be generated using the URL path for passing parameters. The format is exactly the same.
-
-So instead of:
-
-  `http://your.netdata:19999/api/v1/badge.svg?option1&option2&option3&...`
-
-you can write:
-
-  `http://your.netdata:19999/api/v1/badge.svg/option1/option2/option3/...`
-
-You can also append anything else you like, like this:
-
-  `http://your.netdata:19999/api/v1/badge.svg/option1/option2/option3/my-super-badge.svg`
 
 ## FAQ
 
@@ -322,3 +304,5 @@ You can refresh them from your browser console though. Press F12 to open the web
 ```js
 var len = document.images.length; while(len--) { document.images[len].src = document.images[len].src.replace(/\?cacheBuster=\d*/, "") + "?cacheBuster=" + new Date().getTime().toString(); };
 ```
+
+[![analytics](https://www.google-analytics.com/collect?v=1&aip=1&t=pageview&_s=1&ds=github&dr=https%3A%2F%2Fgithub.com%2Fnetdata%2Fnetdata&dl=https%3A%2F%2Fmy-netdata.io%2Fgithub%2Fweb%2Fapi%2Fbadges%2FREADME&_u=MAC~&cid=5792dfd7-8dc4-476b-af31-da2fdb9f93d2&tid=UA-64295674-3)]()

@@ -2,6 +2,13 @@
 <!-- SPDX-License-Identifier: GPL-3.0-or-later -->
 <html lang="en">
 <head>
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+            new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+        j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+        'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','GTM-N6CBMJD');
+    dataLayer.push({"anonymous_statistics" : "false"});
+    </script>
     <title>netdata dashboard</title>
     <meta name="application-name" content="netdata">
 
@@ -13,26 +20,27 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="author" content="costa@tsaousis.gr">
 
-    <link rel="stylesheet" type="text/css" href="main.css">
+    <link rel="stylesheet" type="text/css" href="main.css?v=4">
 
-    <!-- <link rel="shortcut icon" href="images/seo-performance-multi-size.ico"> -->
+    <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAA7EAAAOxAGVKw4bAAACyklEQVRYhcWXz0sUYRjHP8+wLItImEhnEfEgEVJk+56CbCECQWezOkTQTTp6kejgKUSoEAoK/wAhaaeDBkLoIahZIWIJo0U8hHQJJBYJERGfDrOju7PjuO5u6/c0PM/7zvfzvvP+eEaoVu6wBZIA3cW82wtvY7cD1xEWSTpb1bxWjm2RtbtQxoF7iLSA7gO/UL4A74G3mBIzNz0Peg1hFmUK46zXBuDaCYQJlDFE4ke/QreAZyhPMc42rt2PyEoxt4cyDUxgnO3qAVy7C8gg0hdFHwBZA0ZIOt9w7e+I9B6mdBVhmGTlbFQCuPYFhA8g56o3P3D6CwyiDCIyFshtgqRIZnKlUStg3lW7OYC0AvPATkiuA9U3uOlEOEDWTgCZ2s3LIMbCU9ID3A8HUCZO9s2jGCRxdFIflDUF/EX3I3q1N0iq+8BZf+v6MzDeFHMAEQvoJpuOAwiu3Qr89g6ZJkm5CnoHeBwDbjTV3CPoRRhF+WQBA801B+AJiAUMWMDFptuLtBef+iygs+kAh+q0gDOnCNBmETyOmywLKJyifyEG/ATqPP+LUt0FZoAlIA6MgNyKqDo2YkAO6G+QeQrjfCyJzuHaoyCvjuiVs4q0jdBMwNyTcV6j+jm0h7BkAYuohpZLJ1TUQJYrIqo7KAtW8VaabQBA1GVWmROZwzgFfwtOoRpealevdGg0a8eAoUB0D9VJ8M8A46yDTNdlL9wmaz8MMX9RrIQOpfoS4+S9br7cdAvoCiLn6wLxFtwyQhxlKMQ8j3CJpFeml+9QN90N6iLSURfEkXD8AQwms+aHyo9hk1kHSaG6+Z/MU6XmlQAeRA7EoLraQPM83si/BlPhF5E3E1dQfY5S++5Q/9dMLwdH7uv4n1PX7gEeAXejy+0y4x2QOWASk8lHNT0e4AAk3QZ6E6+E68MrZNqK2QKwgXevLCEskHSqumX/AUXU5QBtOC5FAAAAAElFTkSuQmCC">
 
-    <!-- <link rel="apple-touch-icon" href="images/seo-performance-72.png"> -->
-    <!-- <link rel="apple-touch-icon" sizes="72x72" href="images/seo-performance-72.png"> -->
-    <!-- <link rel="apple-touch-icon" sizes="114x114" href="images/seo-performance-114.png"> -->
-
-    <!-- <link rel="icon" type="image/png" sizes="512x512" href="images/seo-performance-512.png"> -->
-    <!-- <link rel="icon" type="image/png" sizes="256x256" href="images/seo-performance-256.png"> -->
-    <!-- <link rel="icon" type="image/png" sizes="128x128" href="images/seo-performance-128.png"> -->
-    <!-- <link rel="icon" type="image/png" sizes="64x64" href="images/seo-performance-64.png"> -->
-    <!-- <link rel="icon" type="image/png" sizes="48x48" href="images/seo-performance-48.png"> -->
-    <!-- <link rel="icon" type="image/png" sizes="24x24" href="images/seo-performance-24.png"> -->
-    <!-- <link rel="icon" type="image/png" sizes="16x16" href="images/seo-performance-16.png"> -->
-    <!-- <link rel="icon" type="image/png" sizes="32x32" href="images/seo-performance-32.png"> -->
-
-    <link rel="icon" type="image/png" sizes="32x32" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAACNklEQVRYhcXXv2tUQRAH8M+FEIJISBHCIWIhIQSUILERi4AiiqCggiIiomAjlhaC4j+ghYWISgqNohZaCBZBC8Ei8QdEUCutFBsxCBqDYkgci/cunkfuJffjJQPD8mZm5/vd2WV2HzlJ0Bs8CvrywsgCHwy+BpGOg0sJfjj4nYKX9FdwKG9gwZlgtgK8pLOpPxfw1mCoCnClDgWtzQTvCEYWCV7SkWAlFBoEb8dlDKBF8t2bMWUSH/AHr3CiEfz5CPUusPJLkRCdk5ZqyeqUrQv4R7E5TwK7M3zTeIKduRAIitiWEfIY69GdCwGcRFuG/xqONRkzkaA7+J5x+MaDtWmHvJ4HgeEM8Nn0bridfv9HoOFyBAdwJCPkqqTzHWwUaz7wgeBHxupfBKuCj2W25mxBsCGYyAB/FxTT27HcPlyep64tCLbjKbqqhLzBlgKfF8pVE4FgRXABI+ioEnYfOyzcFWsCbg+OV+xlpU4ER4O+4HVwL51b3xYEXcGu4Ao+YQhr5gmdxHmsQyfG0b/YxbWmLfRWmnxa0s06VbTMCpnBS9zFzQKTwR5cXCzwHIE02Sl8wSZsRI/kgLVJqjSd+t9LVjiG1diPszhdK3A5gR48k5zYMTwscC59sfT799CYKvA8EttbSeXgTr3gJQKl91kR+yTlvyG5uUbLYh9gb+ovltkb6qYtNSRo3kOygsBSzGlKsubf43USWLYK5CLLXoFWyU/CtzLbVDpW2n+m40yN9ukqdvAX9ac/EIgOapcAAAAASUVORK5CYII=">
-
-    <link rel="mask-icon" href="images/netdata.svg" color="red" />
+    <!-- <link rel="apple-touch-icon" sizes="57x57" href="images/apple-icon-57x57.png">
+    <link rel="apple-touch-icon" sizes="60x60" href="images/apple-icon-60x60.png">
+    <link rel="apple-touch-icon" sizes="72x72" href="images/apple-icon-72x72.png">
+    <link rel="apple-touch-icon" sizes="76x76" href="images/apple-icon-76x76.png">
+    <link rel="apple-touch-icon" sizes="114x114" href="images/apple-icon-114x114.png">
+    <link rel="apple-touch-icon" sizes="120x120" href="images/apple-icon-120x120.png">
+    <link rel="apple-touch-icon" sizes="144x144" href="images/apple-icon-144x144.png">
+    <link rel="apple-touch-icon" sizes="152x152" href="images/apple-icon-152x152.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="images/apple-icon-180x180.png">
+    <link rel="icon" type="image/png" sizes="192x192"  href="images/android-icon-192x192.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="images/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="96x96" href="images/favicon-96x96.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="images/favicon-16x16.png">
+    <link rel="manifest" href="manifest.json">
+    <meta name="msapplication-TileColor" content="#ffffff">
+    <meta name="msapplication-TileImage" content="images/ms-icon-144x144.png">
+    <meta name="theme-color" content="#ffffff"> -->
 
     <meta property="og:locale"             content="en_US" />
     <meta property="og:url"                content="https://my-netdata.io" />
@@ -50,14 +58,20 @@
     <meta name="twitter:description"       content="Unparalleled insights, in real-time, of everything happening on your Linux systems and applications, with stunning, interactive web dashboards and powerful performance and health alarms." />
     <meta name="twitter:image"             content="https://cloud.githubusercontent.com/assets/2662304/14092712/93b039ea-f551-11e5-822c-beadbf2b2a2e.gif" />
 
-    <script src="main.js"></script>
+    <script src="main.js?v=4"></script>
 </head>
 
 <body data-spy="scroll" data-target="#sidebar" data-offset="100">
-    <div id="loadOverlay" class="loadOverlay" style="background-color: #888; color: #888;">
-        netdata<br/><div style="font-size: 3vh;">Real-time performance monitoring, done right!</div>
+    <div id="loadOverlay" class="loadOverlay" style="background-color: #fff; color: #888;">
+        <div style="font-size: 3vh;">
+            You must enable JavaScript in order to use Netdata!<br />
+            You can do this in <a href="https://enable-javascript.com/" target="_blank">your browser settings</a>.
+        </div>
     </div>
     <script type="text/javascript">
+        // Cleanup JS warning.
+        document.documentElement.style.overflowY = "scroll";
+
         // Change the loadOverlay colors ASAP to match the theme.
         let theme;
         const hash = document.location.hash;
@@ -68,31 +82,29 @@
         } else {
             theme = localStorage.getItem('netdataTheme') || 'slate';
         }
-        document.getElementById('loadOverlay').style = theme == 'slate' ? "background-color: #272b30; color: #373b40;" : "background-color: #fff; color: #ddd;";
+        const overlayEl = document.getElementById('loadOverlay');
+        overlayEl.innerHTML = 'netdata<br/><div style="font-size: 3vh;">Real-time performance monitoring, done right!</div>';
+        overlayEl.style = theme == 'slate' ? "background-color: #272b30; color: #373b40;" : "background-color: #fff; color: #ddd;";
     </script>
     <nav class="navbar navbar-default navbar-fixed-top" role="banner">
         <div class="container">
-            <nav id="mynetdata_nav" class="collapse navbar-collapse navbar-left hidden-sm hidden-xs" role="navigation" style="padding-right: 20px;">
+            <!-- <nav id="mynetdata_nav" class="collapse navbar-collapse navbar-left" role="navigation" style="padding-right: 20px;">
                 <ul class="nav navbar-nav">
+                    <li data-placement="right" style="line-height: 50px; margin-right: 15px" title="Netdata Agent">
+                       <img src="images/netdata-logomark.svg" height="32"/>
+                    </li>
                     <li class="dropdown" id="myNetdataDropdownParent" title="your other netdata servers" data-toggle="tooltip" data-placement="right">
-                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">my-netdata <strong class="caret"></strong></a>
-                        <ul class="dropdown-menu scrollable-menu inpagemenu multi-column columns-2" role="menu" id="myNetdataDropdownUL">
-                            <div class="row">
-                                <div class="col-sm-6" style="width: 85%; padding-right: 0;">
-                                    <ul id="mynetdata_servers" class="multi-column-dropdown">
-                                        <li><a href="#" onclick="return false;" style="color: #999;">loading...</a></li>
-                                    </ul>
-                                </div>
-                                <div class="col-sm-3 hidden-xs" style="width: 15%; padding-left: 0;">
-                                    <ul id="mynetdata_actions1" class="multi-column-dropdown">
-                                    <li style="color: #999;">&nbsp;</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </ul>
+                        <a href="#" id="hostname" class="dropdown-toggle" data-toggle="dropdown">my-netdata <strong class="caret"></strong></a>
+                        <div id="my-netdata-dropdown-content" class="dropdown-menu scrollable-menu inpagemenu">
+                            <div class="agent-item" style="white-space: nowrap">
+                                <i class="fas fa-hourglass-half"></i>
+                                Loading, please wait...
+                                <div></div>
+                            </div>                            
+                        </div>
                     </li>
                 </ul>
-            </nav>
+            </nav> -->
             <div class="navbar-header">
                 <button class="navbar-toggle" type="button" data-toggle="collapse" data-target=".navbar-collapse">
                     <span class="sr-only">Toggle navigation</span>
@@ -100,26 +112,56 @@
                     <span class="icon-bar"></span>
                     <span class="icon-bar"></span>
                 </button>
-                <a href="/" class="navbar-brand" id="hostname" title="server hostname<br/>click it to reload the dashboard" data-toggle="tooltip" data-placement="bottom">netdata</a>
+                <!-- <a href="/" class="navbar-brand" id="1hostname" title="server hostname<br/>click it to reload the dashboard" data-toggle="tooltip" data-placement="bottom">netdata</a> -->
+                <ul class="nav navbar-nav" style="display: inline-block">
+                    <li data-placement="right" class="hidden-xs hidden-sm" style="line-height: 50px; margin-right: 15px" title="Netdata Agent">
+                       <img src="images/netdata-logomark.svg" height="32"/>
+                    </li>
+                    <li class="dropdown" id="myNetdataDropdownParent" title="your other netdata servers" data-toggle="tooltip" data-placement="right">
+                        <a href="#" id="hostname" class="dropdown-toggle" data-toggle="dropdown">my-netdata <strong class="caret"></strong></a>
+                        <div id="my-netdata-dropdown-content" class="dropdown-menu scrollable-menu inpagemenu">
+                            <div class="agent-item" style="white-space: nowrap">
+                                <i class="fas fa-hourglass-half"></i>
+                                Loading, please wait...
+                                <div></div>
+                            </div>                            
+                        </div>
+                    </li>
+                </ul>
             </div>
             <nav class="collapse navbar-collapse navbar-right" role="navigation">
                 <ul class="nav navbar-nav">
                     <li id="alarmsButton"  title="check the health monitoring alarms and their log" data-toggle="tooltip" data-placement="bottom"><a href="#" class="btn" data-toggle="modal" data-target="#alarmsModal"><i class="fas fa-bell"></i>&nbsp;<span class="hidden-sm hidden-md">Alarms&nbsp;</span><span id="alarms_count_badge" class="badge"></span></a></li>
                     <li title="change dashboard settings" data-toggle="tooltip" data-placement="bottom"><a href="#" class="btn" data-toggle="modal" data-target="#optionsModal"><i class="fas fa-cog"></i>&nbsp;<span class="hidden-sm hidden-md">Settings</span></a></li>
                     <li title="check for netdata updates<br/>you should keep your netdata updated" data-toggle="tooltip" data-placement="bottom" class="hidden-sm" id="updateButton"><a href="#" class="btn" data-toggle="modal" data-target="#updateModal"><i class="fas fa-cloud-download-alt"></i> <span class="hidden-sm hidden-md">Update </span><span id="update_badge" class="badge"></span></a></li>
-                    <li title="the netdata wiki home at github<br/>remember to <b>give netdata a <i class=&quot;fas fa-star&quot;></i></b> !" data-toggle="tooltip" data-placement="bottom" class="hidden-sm hidden-md"><a href="https://github.com/netdata/netdata/wiki" class="btn" target="_blank"><i class="fab fa-github"></i></a></li>
-                    <li title="follow netdata on twitter" data-toggle="tooltip" data-placement="bottom" class="hidden-sm hidden-md"><a href="https://twitter.com/linuxnetdata" class="btn" target="_blank"><i class="fab fa-twitter"></i></a></li>
-                    <li title="like netdata on facebook" data-toggle="tooltip" data-placement="bottom" class="hidden-sm hidden-md"><a href="https://www.facebook.com/linuxnetdata/" class="btn" target="_blank"><i class="fab fa-facebook"></i></a></li>
+                    <li title="the netdata wiki home at github<br/>remember to <b>give netdata a <i class=&quot;fas fa-star&quot;></i></b> !" data-toggle="tooltip" data-placement="bottom" class="hidden-xs hidden-sm hidden-md"><a href="https://github.com/netdata/netdata" class="btn" target="_blank"><i class="fab fa-github"></i></a></li>
+                    <li title="follow netdata on twitter" data-toggle="tooltip" data-placement="bottom" class="hidden-xs hidden-sm hidden-md"><a href="https://twitter.com/linuxnetdata" class="btn" target="_blank"><i class="fab fa-twitter"></i></a></li>
+                    <li title="like netdata on facebook" data-toggle="tooltip" data-placement="bottom" class="hidden-xs hidden-sm hidden-md"><a href="https://www.facebook.com/linuxnetdata/" class="btn" target="_blank"><i class="fab fa-facebook"></i></a></li>
                     <li title="import / load a netdata snapshot" data-toggle="tooltip" data-placement="bottom" id="loadButton"><a href="#" class="btn" data-toggle="modal" data-target="#loadSnapshotModal"><i class="fas fa-download"></i>&nbsp;<span class="hidden-sm hidden-md hidden-lg">Import</span></a></li>
                     <li title="export / save a netdata snapshot" data-toggle="tooltip" data-placement="bottom" id="saveButton"><a href="#" class="btn" data-toggle="modal" data-target="#saveSnapshotModal"><i class="fas fa-upload"></i>&nbsp;<span class="hidden-sm hidden-md hidden-lg">Export</span></a></li>
                     <li title="print this dashboard to PDF" data-toggle="tooltip" data-placement="bottom" id="printButton"><a href="#" class="btn" data-toggle="modal" data-target="#printPreflightModal"><i class="fas fa-print"></i>&nbsp;<span class="hidden-sm hidden-md hidden-lg">Print</span></a></li>
                     <li title="get help on using the charts" data-toggle="tooltip" data-placement="bottom" class="hidden-sm"><a href="#" class="btn" data-toggle="modal" data-target="#helpModal"><i class="fas fa-question-circle"></i>&nbsp;<span class="hidden-sm hidden-md">Help</span></a></li>
-                    <li class="dropdown hidden-sm hidden-md hidden-lg">
+                    <li id="account-menu-container" class="dropdown" data-toggle="tooltip"></li>
+                    <!--
+                    <li class="dropdown hidden-sm hidden-md hidden-lg" id="myNetdataDropdownParent" title="your other netdata servers" data-toggle="tooltip" data-placement="right">
                         <a href="#" class="dropdown-toggle" data-toggle="dropdown">my-netdata <strong class="caret"></strong></a>
+                        <div id="my-netdata-dropdown-content" class="dropdown-menu scrollable-menu inpagemenu">
+                            <div class="agent-item" style="white-space: nowrap">
+                                <i class="fas fa-hourglass-half"></i>
+                                Loading, please wait...
+                                <div></div>
+                            </div>                            
+                        </div>
+                    </li>
+                    -->
+                    <!--
+                    <li class="dropdown hidden-sm hidden-md hidden-lg">
+                        <a href="#" class="dropdown-toggle" data-toggle="dropdown">My Nodes <strong class="caret"></strong></a>
                         <ul id="mynetdata_servers2" class="dropdown-menu scrollable-menu inpagemenu" role="menu">
                             <li><a href="#" onclick="return false;" style="color: #999;">loading...</a></li>
                         </ul>
                     </li>
+                    -->
                 </ul>
             </nav>
         </div>
@@ -170,56 +212,15 @@
         <div class="row">
             <div class="col-md-10" role="main">
                 <div class="p">
-                    <big><a href="https://github.com/netdata/netdata/wiki" target="_blank">netdata</a></big><br/>
+                    <big><a href="https://github.com/netdata/netdata/wiki" target="_blank">Netdata</a></big>
+                    <br /><br />
+                    <i class="fas fa-copyright"></i> Copyright 2018, <a href="mailto:info@netdata.cloud">Netdata, Inc</a>.<br/>
                     <i class="fas fa-copyright"></i> Copyright 2016-2018, <a href="mailto:costa@tsaousis.gr">Costa Tsaousis</a>.<br/>
-                    Released under <a href="http://www.gnu.org/licenses/gpl-3.0.en.html" target="_blank">GPL v3 or later</a>.<br/>
                 </div>
                 <div class="p">
-                    <small>
-                        <a href="https://github.com/netdata/netdata/wiki" target="_blank">netdata</a> uses the following third party tools on this dashboard:
-
-                        <i class="fas fa-circle"></i> The excellent <a href="http://dygraphs.com/" target="_blank">Dygraphs.com</a> web chart library,
-                        <i class="fas fa-copyright"></i> Copyright 2009, Dan Vanderkam, <a href="http://dygraphs.com/legal.html" target="_blank">MIT License</a>
-
-                        <i class="fas fa-circle"></i> <a href="https://rendro.github.io/easy-pie-chart/" target="_blank">Easy Pie Chart</a> web chart library,
-                        <i class="fas fa-copyright"></i> Copyright 2013, Robert Fleischmann, <a href="https://github.com/rendro/easy-pie-chart/blob/master/LICENSE" target="_blank">MIT License</a>
-
-                        <i class="fas fa-circle"></i> <a href="http://bernii.github.io/gauge.js/" target="_blank">Gauge.js</a> web chart library,
-                        <i class="fas fa-copyright"></i> Copyright, Bernard Kobos, <a href="http://bernii.github.io/gauge.js/" target="_blank">MIT License</a>
-
-                        <i class="fas fa-circle"></i> <a href="https://github.com/benkeen/d3pie" target="_blank">d3pie</a> web chart library,
-                        <i class="fas fa-copyright"></i> Copyright 2014-2015 Benjamin Keen, <a href="https://github.com/benkeen/d3pie/blob/master/LICENSE" target="_blank">MIT License</a>
-
-                        <i class="fas fa-circle"></i> <a href="http://d3js.org/" target="_blank">D3</a> web graphics library,
-                        <i class="fas fa-copyright"></i> Copyright 2015 Mike Bostock, <a href="http://opensource.org/licenses/BSD-3-Clause" target="_blank">BSD License</a>
-
-                        <i class="fas fa-circle"></i> <a href="https://jquery.org/" target="_blank">jQuery</a>,
-                        <i class="fas fa-copyright"></i> Copyright 2015, jQuery Foundation, <a href="https://jquery.org/license/" target="_blank">MIT License</a>
-
-                        <i class="fas fa-circle"></i> <a href="http://getbootstrap.com/getting-started/" target="_blank">Bootstrap</a>,
-                        <i class="fas fa-copyright"></i> Copyright 2015, Twitter, <a href="http://getbootstrap.com/getting-started/#license-faqs" target="_blank">MIT License</a>
-
-                        <i class="fas fa-circle"></i> <a href="http://www.bootstraptoggle.com/" target="_blank">Bootstrap Toggle</a>,
-                        <i class="fas fa-copyright"></i> Copyright 2011-2014 Min Hur, The New York Times Company, <a href="https://github.com/minhur/bootstrap-toggle/blob/master/LICENSE" target="_blank">MIT License</a>
-
-                        <i class="fas fa-circle"></i> <a href="http://seiyria.com/bootstrap-slider/" target="_blank">Bootstrap-slider</a>,
-                        <i class="fas fa-copyright"></i> Copyright 2017 Kyle Kemp, Rohit Kalkur, and contributors, <a href="https://github.com/seiyria/bootstrap-slider/blob/master/LICENSE.md" target="_blank">MIT License</a>
-
-                        <i class="fas fa-circle"></i> <a href="https://github.com/noraesae/perfect-scrollbar" target="_blank">perfect-scrollbar</a>,
-                        <i class="fas fa-copyright"></i> Copyright 2016, Hyunje Alex Jun and other contributors, <a href="https://github.com/noraesae/perfect-scrollbar/blob/master/LICENSE" target="_blank">MIT License</a>
-
-                        <i class="fas fa-circle"></i> <a href="https://fortawesome.github.io/Font-Awesome/" target="_blank">FontAwesome</a>,
-                        <i class="fas fa-copyright"></i> Created by Dave Gandy, Font: <a href="http://scripts.sil.org/OFL" target="_blank">SIL OFL 1.1 License</a>, CSS: <a href="http://opensource.org/licenses/mit-license.html" target="_blank">MIT License</a>
-
-                        <i class="fas fa-circle"></i> <a href="http://www.iconsdb.com/soylent-red-icons/seo-performance-icon.html" target="_blank">IconsDB.com Icons</a>, Icons provided as CC0 1.0 Universal (CC0 1.0) Public Domain Dedication.
-
-                        <i class="fas fa-circle"></i> <a href="http://bootstrap-table.wenzhixin.net.cn/" target="_blank">bootstrap-table</a>,
-                        <i class="fas fa-copyright"></i> Copyright 2012-2016 Zhixin Wen, <a href="https://github.com/wenzhixin/bootstrap-table/blob/master/LICENSE" target="_blank">MIT License</a>
-
-                        <i class="fas fa-circle"></i> <a href="https://github.com/hhurz/tableExport.jquery.plugin" target="_blank">tableExport.jquery.plugin</a>,
-                        <i class="fas fa-copyright"></i> Copyright 2015,2016 hhurz, <a href="http://rawgit.com/hhurz/tableExport.jquery.plugin/master/tableExport.js" target="_blank">MIT License</a>
-
-                    </small>
+                    Released under <a href="http://www.gnu.org/licenses/gpl-3.0.en.html" target="_blank">GPL v3 or later</a>.
+                    Netdata uses <a href="https://github.com/netdata/netdata/blob/master/REDISTRIBUTED.md" target="_blank">third party tools</a>.
+                    <br /><br />
                 </div>
             </div>
         </div>
@@ -470,7 +471,7 @@
                     <div class="p">
                         <b><a href="https://github.com/netdata/netdata/wiki" target="_blank">netdata</a></b> is free,
                         open-source software. If you decide to use it,
-                        <strong><a href="https://github.com/netdata/netdata/wiki/a-github-star-is-important" target="_blank">it is important to give netdata a star at GitHub</a></strong>.
+                        <strong><a href="https://github.com/netdata/netdata/tree/master/docs/a-github-star-is-important.md" target="_blank">it is important to give netdata a star at GitHub</a></strong>.
                     </div>
                     <div class="p">
                         Enjoy real-time performance monitoring!
@@ -1198,7 +1199,6 @@
                 </div>
                 <div class="modal-body">
                     Your netdata version: <b><code><span id="netdataVersion">Unknown</span></code></b><br/>
-                    Your netdata commit: <b><code><span id="netdataCommitId">Unknown</span></code></b>
                     <br/>
                     <div style="padding: 10px;"></div>
                     <div id="versionCheckLog">Not checked yet. Please press the Check Now button.</div>
@@ -1215,6 +1215,61 @@
                 <div class="modal-footer">
                     <a href="#" onclick="notifyForUpdate(true); return false;" type="button" class="btn btn-default">Check Now</a>
                     <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="signInModal" tabindex="-1" role="dialog" aria-labelledby="signInModalLabel">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title" id="signInModalLabel">Sign In</h4>
+                </div>
+                <div class="modal-body">
+                    <p>
+                        Signing-in to netdata.cloud will synchronize the list of 
+                        your netdata monitored nodes known at registry 
+                        <strong><span id="sim-registry"></span></strong>. This 
+                        may include server hostnames, urls and identification 
+                        GUIDs.
+                    </p>
+                    <p>
+                        After you upgrade all your netdata servers, your private 
+                        registry will not be needed any more.
+                    </p>
+                    <p>
+                        Are you sure you want to proceed?
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                    <a href="#" onclick="explicitlySignIn(); return false;" type="button" class="btn btn-success">Sign In</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="syncRegistryModal" tabindex="-1" role="dialog" aria-labelledby="syncRegistryModalLabel">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title" id="syncRegistryModalLabel">Synchronize netdata.cloud with registry?</h4>
+                </div>
+                <div class="modal-body">
+                    <p>
+                        You are about to synchronize your netdata.cloud account with data from the registry at <strong><span id="sync-registry-modal-registry"></span></strong>.
+                        This may include server hostnames, urls and identification GUIDs.
+                    </p>
+                    <p>
+                        Are you sure you want to proceed?
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Cancel</button>
+                    <a href="#" onclick="explicitlySyncAgents(); return false;" type="button" class="btn btn-success">Synchronize</a>
                 </div>
             </div>
         </div>
@@ -1309,7 +1364,8 @@
             </div>
         </div>
     </div>
+    <iframe id="ssoifrm" width="0" height="0"></iframe>
     <div id="hiddenDownloadLinks" style="display: none;" hidden></div>
-    <script type="text/javascript" src="dashboard.js?v20181013-2"></script>
+    <script type="text/javascript" src="dashboard.js?v20190130-1"></script>
 </body>
 </html>

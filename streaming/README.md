@@ -1,4 +1,4 @@
-# Metrics streaming
+# Streaming and replication
 
 Each netdata is able to replicate/mirror its database to another netdata, by streaming collected
 metrics, in real-time to it. This is quite different to [data archiving to third party time-series
@@ -11,37 +11,37 @@ a netdata performs:
 - run health checks that trigger alarms and send alarm notifications
 - archive metrics to a backend time-series database
 
-The following configurations are supported:
+## Supported configurations
 
-#### Netdata without a database or web API (headless collector)
+### netdata without a database or web API (headless collector)
 
 Local netdata (`slave`), **without any database or alarms**, collects metrics and sends them to
 another netdata (`master`).
 
-The user can take the full functionality of the `slave` netdata at
-http://master.ip:19999/host/slave.hostname/. Alarms for the `slave` are served by the `master`.
+The `my-netdata` menu shows a list of all "databases streamed to" the master. Clicking one of those links allows the user to view the full dashboard of the `slave` netdata. The URL has the form http://master-host:master-port/host/slave-host/. 
 
-In this mode the `slave` is just a plain data collector.
-It runs with... **5MB** of RAM (yes, you read correct), spawns all external plugins, but instead
+Alarms for the `slave` are served by the `master`.
+
+In this mode the `slave` is just a plain data collector. It spawns all external plugins, but instead
 of maintaining a local database and accepting dashboard requests, it streams all metrics to the
-`master`.
+`master`. The memory footprint is reduced significantly, to between 6 MiB and 40 MiB, depending on the enabled plugins. To reduce the memory usage as much as possible, refer to [running netdata in embedded devices](../docs/Performance.md#running-netdata-in-embedded-devices).
 
 The same `master` can collect data for any number of `slaves`.
 
-#### Database replication
+### database replication
 
 Local netdata (`slave`), **with a local database (and possibly alarms)**, collects metrics and
 sends them to another netdata (`master`).
 
-The user can use all the functions **at both** http://slave.ip:19999/ and
-http://master.ip:19999/host/slave.hostname/.
+The user can use all the functions **at both** http://slave-ip:slave-port/ and
+http://master-host:master-port/host/slave-host/.
 
 The `slave` and the `master` may have different data retention policies for the same metrics.
 
 Alarms for the `slave` are triggered by **both** the `slave` and the `master` (and actually
 each can have different alarms configurations or have alarms disabled).
 
-#### netdata proxies
+### netdata proxies
 
 Local netdata (`slave`), with or without a database, collects metrics and sends them to another
 netdata (`proxy`), which may or may not maintain a database, which forwards them to another
@@ -52,7 +52,7 @@ Alarms for the slave can be triggered by any of the involved hosts that maintain
 Any number of daisy chaining netdata servers are supported, each with or without a database and
 with or without alarms for the `slave` metrics.
 
-#### mix and match with backends
+### mix and match with backends
 
 All nodes that maintain a database can also send their data to a backend database.
 This allows quite complex setups.
@@ -67,7 +67,7 @@ Example:
 6. alarms are triggered by `H` for all hosts
 7. users can use all the netdata that maintain a database to view metrics (i.e. at `H` all hosts can be viewed).
 
-#### netdata.conf configuration
+## Configuration
 
 These are options that affect the operation of netdata in this area:
 
@@ -81,11 +81,14 @@ monitoring (there cannot be health monitoring without a database).
 
 ```
 [web]
-    mode = none | static-threaded | single-threaded | multi-threaded
+    mode = none | static-threaded 
+    accept a streaming request every seconds = 0 
 ```
 
 `[web].mode = none` disables the API (netdata will not listen to any ports).
 This also disables the registry (there cannot be a registry without an API).
+
+`accept a streaming request every seconds` can be used to set a limit on how often a master Netdata server will accept streaming requests from the slaves. 0 sets no limit, 1 means maximum once every second. If this is set, you may see error log entries "... too busy to accept new streaming request. Will be allowed in X secs". 
 
 ```
 [backend]
@@ -98,7 +101,7 @@ This also disables the registry (there cannot be a registry without an API).
 `[backend]` configures data archiving to a backend (it archives all databases maintained on
 this host).
 
-#### streaming configuration
+### streaming configuration
 
 A new file is introduced: [stream.conf](stream.conf) (to edit it on your system run
 `/etc/netdata/edit-config stream.conf`). This file holds streaming configuration for both the
@@ -167,7 +170,7 @@ the unique id the netdata generating the metrics (i.e. the netdata that original
 them `/var/lib/netdata/registry/netdata.unique.id`). So, metrics for netdata `A` that pass through
 any number of other netdata, will have the same `MACHINE_GUID`.
 
-####### allow from
+##### allow from
 
 `allow from` settings are [netdata simple patterns](../libnetdata/simple_pattern): string matches
 that use `*` as wildcard (any number of times) and a `!` prefix for a negative match.
@@ -176,7 +179,7 @@ important: left to right, the first positive or negative match is used.
 
 `allow from` is available in netdata v1.9+
 
-#### tracing
+##### tracing
 
 When a `slave` is trying to push metrics to a `master` or `proxy`, it logs entries like these:
 
@@ -203,7 +206,7 @@ The receiving end (`proxy` or `master`) logs entries like these:
 For netdata v1.9+, streaming can also be monitored via `access.log`.
 
 
-#### Viewing remote host dashboards, using mirrored databases
+## Viewing remote host dashboards, using mirrored databases
 
 On any receiving netdata, that maintains remote databases and has its web server enabled,
 `my-netdata` menu will include a list of the mirrored databases.
@@ -240,7 +243,7 @@ Following the netdata way of monitoring, we wanted:
 3. **zero configuration**, all ephemeral servers should have exactly the same configuration, and nothing should be configured at any system for each of the ephemeral nodes. We shouldn't care if 10 or 100 servers are spawned to handle the load.
 4. **self-cleanup**, so that nothing needs to be done for cleaning up the monitoring infrastructure from the hundreds of nodes that may have been monitored through time.
 
-#### How it works
+### How it works
 
 All monitoring solutions, including netdata, work like this:
 
@@ -306,10 +309,10 @@ On each of the slaves, edit `/etc/netdata/stream.conf` (to edit it on your syste
 [stream]
     # stream metrics to another netdata
     enabled = yes
-
+    
     # the IP and PORT of the master
     destination = 10.11.12.13:19999
-
+	
 	# the API key to use
     api key = 11111111-2222-3333-4444-555555555555
 ```
@@ -339,6 +342,7 @@ The file `/var/lib/netdata/registry/netdata.public.unique.id` contains a random 
 #### Troubleshooting metrics streaming
 
 Both the sender and the receiver of metrics log information at `/var/log/netdata/error.log`.
+
 
 On both master and slave do this:
 
@@ -393,6 +397,7 @@ This means a setup like the following is also possible:
 <img src="https://cloud.githubusercontent.com/assets/2662304/23629551/bb1fd9c2-02c0-11e7-90f5-cab5a3ed4c53.png"/>
 </p>
 
+
 ## proxies
 
 A proxy is a netdata that is receiving metrics from a netdata, and streams them to another netdata.
@@ -408,3 +413,5 @@ The sending side of a netdata proxy, connects and disconnects to the final desti
 metrics, following the same pattern of the receiving side.
 
 For a practical example see [Monitoring ephemeral nodes](#monitoring-ephemeral-nodes).
+
+[![analytics](https://www.google-analytics.com/collect?v=1&aip=1&t=pageview&_s=1&ds=github&dr=https%3A%2F%2Fgithub.com%2Fnetdata%2Fnetdata&dl=https%3A%2F%2Fmy-netdata.io%2Fgithub%2Fstreaming%2FREADME&_u=MAC~&cid=5792dfd7-8dc4-476b-af31-da2fdb9f93d2&tid=UA-64295674-3)]()

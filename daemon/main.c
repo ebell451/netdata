@@ -2,6 +2,8 @@
 
 #include "common.h"
 
+int netdata_anonymous_statistics_enabled;
+
 struct config netdata_config = {
         .sections = NULL,
         .mutex = NETDATA_MUTEX_INITIALIZER,
@@ -21,6 +23,8 @@ void netdata_cleanup_and_exit(int ret) {
 
     error_log_limit_unlimited();
     info("EXIT: netdata prepares to exit with code %d...", ret);
+
+	send_statistics("EXIT", ret?"ERROR":"OK","-");
 
     // cleanup/save the database and exit
     info("EXIT: cleaning up the database...");
@@ -56,7 +60,6 @@ struct netdata_static_thread static_threads[] = {
     NETDATA_PLUGIN_HOOK_MACOS
 
     // linux internal plugins
-    NETDATA_PLUGIN_HOOK_LINUX_NFACCT
     NETDATA_PLUGIN_HOOK_LINUX_PROC
     NETDATA_PLUGIN_HOOK_LINUX_DISKSPACE
     NETDATA_PLUGIN_HOOK_LINUX_CGROUPS
@@ -67,8 +70,6 @@ struct netdata_static_thread static_threads[] = {
 
         // common plugins for all systems
     {"BACKENDS",             NULL,                    NULL,         1, NULL, NULL, backends_main},
-    {"WEB_SERVER[multi]",    NULL,                    NULL,         1, NULL, NULL, socket_listen_main_multi_threaded},
-    {"WEB_SERVER[single]",   NULL,                    NULL,         0, NULL, NULL, socket_listen_main_single_threaded},
     {"WEB_SERVER[static1]",  NULL,                    NULL,         0, NULL, NULL, socket_listen_main_static_threaded},
     {"STREAM",               NULL,                    NULL,         0, NULL, NULL, rrdpush_sender_thread},
 
@@ -81,18 +82,10 @@ struct netdata_static_thread static_threads[] = {
 void web_server_threading_selection(void) {
     web_server_mode = web_server_mode_id(config_get(CONFIG_SECTION_WEB, "mode", web_server_mode_name(web_server_mode)));
 
-    int multi_threaded = (web_server_mode == WEB_SERVER_MODE_MULTI_THREADED);
-    int single_threaded = (web_server_mode == WEB_SERVER_MODE_SINGLE_THREADED);
     int static_threaded = (web_server_mode == WEB_SERVER_MODE_STATIC_THREADED);
 
     int i;
     for (i = 0; static_threads[i].name; i++) {
-        if (static_threads[i].start_routine == socket_listen_main_multi_threaded)
-            static_threads[i].enabled = multi_threaded;
-
-        if (static_threads[i].start_routine == socket_listen_main_single_threaded)
-            static_threads[i].enabled = single_threaded;
-
         if (static_threads[i].start_routine == socket_listen_main_static_threaded)
             static_threads[i].enabled = static_threaded;
     }
@@ -113,6 +106,8 @@ void web_server_config_options(void) {
     web_allow_registry_from    = simple_pattern_create(config_get(CONFIG_SECTION_REGISTRY, "allow from", "*"), NULL, SIMPLE_PATTERN_EXACT);
     web_allow_streaming_from   = simple_pattern_create(config_get(CONFIG_SECTION_WEB, "allow streaming from", "*"), NULL, SIMPLE_PATTERN_EXACT);
     web_allow_netdataconf_from = simple_pattern_create(config_get(CONFIG_SECTION_WEB, "allow netdata.conf from", "localhost fd* 10.* 192.168.* 172.16.* 172.17.* 172.18.* 172.19.* 172.20.* 172.21.* 172.22.* 172.23.* 172.24.* 172.25.* 172.26.* 172.27.* 172.28.* 172.29.* 172.30.* 172.31.*"), NULL, SIMPLE_PATTERN_EXACT);
+    web_allow_mgmt_from        = simple_pattern_create(config_get(CONFIG_SECTION_WEB, "allow management from", "localhost"), NULL, SIMPLE_PATTERN_EXACT);
+
 
 #ifdef NETDATA_WITH_ZLIB
     web_enable_gzip = config_get_boolean(CONFIG_SECTION_WEB, "enable gzip compression", web_enable_gzip);
@@ -202,6 +197,8 @@ void cancel_main_threads() {
             found++;
         }
     }
+
+    netdata_exit = 1;
 
     while(found && max > 0) {
         max -= step;
@@ -367,13 +364,6 @@ void log_init(void) {
 }
 
 static void backwards_compatible_config() {
-    // allow existing configurations to work with the current version of netdata
-
-    if(config_exists(CONFIG_SECTION_GLOBAL, "multi threaded web server")) {
-        int mode = config_get_boolean(CONFIG_SECTION_GLOBAL, "multi threaded web server", 1);
-        web_server_mode = (mode)?WEB_SERVER_MODE_MULTI_THREADED:WEB_SERVER_MODE_SINGLE_THREADED;
-    }
-
     // move [global] options to the [web] section
     config_move(CONFIG_SECTION_GLOBAL, "http port listen backlog",
                 CONFIG_SECTION_WEB,    "listen backlog");
@@ -473,6 +463,7 @@ static void get_netdata_configured_variables() {
         netdata_configured_plugins_dir_base = strdupz(config_get(CONFIG_SECTION_GLOBAL, "plugins directory",  plugins_dirs));
         quoted_strings_splitter(netdata_configured_plugins_dir_base, plugin_directories, PLUGINSD_MAX_DIRECTORIES, config_isspace);
         netdata_configured_plugins_dir = plugin_directories[0];
+
     }
 
     // ------------------------------------------------------------------------
@@ -596,6 +587,7 @@ void set_global_environment() {
         setenv("NETDATA_UPDATE_EVERY", b, 1);
     }
 
+    setenv("NETDATA_VERSION"          , program_version, 1);
     setenv("NETDATA_HOSTNAME"         , netdata_configured_hostname, 1);
     setenv("NETDATA_CONFIG_DIR"       , verify_required_directory(netdata_configured_user_config_dir),  1);
     setenv("NETDATA_USER_CONFIG_DIR"  , verify_required_directory(netdata_configured_user_config_dir),  1);
@@ -656,6 +648,47 @@ static int load_netdata_conf(char *filename, char overwrite_used) {
     }
 
     return ret;
+}
+
+
+void send_statistics( const char *action, const char *action_result, const char *action_data) {
+    static char *as_script;
+    if (netdata_anonymous_statistics_enabled == -1) {
+        char *optout_file = mallocz(sizeof(char) * (strlen(netdata_configured_user_config_dir) +strlen(".opt-out-from-anonymous-statistics") + 2));
+        sprintf(optout_file, "%s/%s", netdata_configured_user_config_dir, ".opt-out-from-anonymous-statistics");
+        if (likely(access(optout_file, R_OK) != 0)) {
+            as_script = mallocz(sizeof(char) * (strlen(netdata_configured_plugins_dir) + strlen("anonymous-statistics.sh") + 2));
+            sprintf(as_script, "%s/%s", netdata_configured_plugins_dir, "anonymous-statistics.sh");
+			if (unlikely(access(as_script, R_OK) != 0)) {
+				netdata_anonymous_statistics_enabled=0;
+				info("Anonymous statistics script %s not found.",as_script);
+				freez(as_script);
+			} else {
+				netdata_anonymous_statistics_enabled=1;
+			}
+		} else {
+            netdata_anonymous_statistics_enabled = 0;
+            as_script = NULL;
+        }
+        freez(optout_file);
+    }
+	if(!netdata_anonymous_statistics_enabled) return;
+    if (!action) return;
+    if (!action_result) action_result="";
+    if (!action_data) action_data="";
+    char *command_to_run=mallocz(sizeof(char) * (strlen(action) + strlen(action_result) + strlen(action_data) + strlen(as_script) + 10));
+    pid_t command_pid;
+
+    sprintf(command_to_run,"%s '%s' '%s' '%s'", as_script, action, action_result, action_data);
+    info("%s", command_to_run);
+
+    FILE *fp = mypopen(command_to_run, &command_pid);
+    if(fp) {
+        char buffer[100 + 1];
+        while (fgets(buffer, 100, fp) != NULL);
+        mypclose(fp, command_pid);
+    }
+    freez(command_to_run);
 }
 
 int main(int argc, char **argv) {
@@ -876,7 +909,6 @@ int main(int argc, char **argv) {
                                 load_netdata_conf(NULL, 0);
                             }
 
-                            backwards_compatible_config();
                             get_netdata_configured_variables();
 
                             const char *section = argv[optind];
@@ -925,11 +957,15 @@ int main(int argc, char **argv) {
         if(i > 0)
             mallopt(M_ARENA_MAX, 1);
 #endif
+        test_clock_boottime();
 
         // prepare configuration environment variables for the plugins
 
         get_netdata_configured_variables();
         set_global_environment();
+
+        netdata_anonymous_statistics_enabled=-1;
+        send_statistics("START","-", "-");
 
         // work while we are cd into config_dir
         // to allow the plugins refer to their config
@@ -1055,7 +1091,6 @@ int main(int argc, char **argv) {
     // initialize rrd, registry, health, rrdpush, etc.
 
     rrd_init(netdata_configured_hostname);
-
 
     // ------------------------------------------------------------------------
     // enable log flood protection

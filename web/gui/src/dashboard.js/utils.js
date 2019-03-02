@@ -1,3 +1,15 @@
+// *** src/dashboard.js/utils.js
+
+NETDATA.name2id = function (s) {
+    return s
+        .replace(/ /g, '_')
+        .replace(/:/g, '_')
+        .replace(/\(/g, '_')
+        .replace(/\)/g, '_')
+        .replace(/\./g, '_')
+        .replace(/\//g, '_');
+};
+
 NETDATA.encodeURIComponent = function (s) {
     if (typeof(s) === 'string') {
         return encodeURIComponent(s);
@@ -63,7 +75,7 @@ NETDATA.seconds4human = function (seconds, options) {
     if (typeof options !== 'object') {
         options = defaultOptions;
     } else {
-        for (const x in defaultOptions) {
+        for (var x in defaultOptions) {
             if (typeof options[x] !== 'string') {
                 options[x] = defaultOptions[x];
             }

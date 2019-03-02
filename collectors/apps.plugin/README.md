@@ -77,7 +77,7 @@ To do this, edit `/etc/netdata/netdata.conf` and find this section:
 ```
 [plugin:apps]
 	# update every = 1
-	# command options = 
+	# command options =
 ```
 
 Uncomment the line `update every` and set it to a higher number. If you just set it to ` 2 `,
@@ -100,7 +100,8 @@ For the **Applications** section, only groups configured in this file are report
 All other processes will be reported as `other`.
 
 For each process given, its whole process tree will be grouped, not just the process matched.
-The plugin will include both parents and children.
+The plugin will include both parents and children. If including the parents into the group is
+undesirable, the line `other: *` should be appended to the `apps_groups.conf`.
 
 The process names are the ones returned by:
 
@@ -188,21 +189,21 @@ Here is an example for the process group `sql` at `https://registry.my-netdata.i
 Netdata is able give you a lot more badges for your app.
 Examples below for process group `sql`:
 
-- CPU usage: ![image](http://registry.my-netdata.io/api/v1/badge.svg?chart=apps.cpu&dimensions=sql&value_color=green=0%7Corange%3C50%7Cred)
-- Disk Physical Reads ![image](http://registry.my-netdata.io/api/v1/badge.svg?chart=apps.preads&dimensions=sql&value_color=green%3C100%7Corange%3C1000%7Cred)
-- Disk Physical Writes ![image](http://registry.my-netdata.io/api/v1/badge.svg?chart=apps.pwrites&dimensions=sql&value_color=green%3C100%7Corange%3C1000%7Cred)
-- Disk Logical Reads ![image](http://registry.my-netdata.io/api/v1/badge.svg?chart=apps.lreads&dimensions=sql&value_color=green%3C100%7Corange%3C1000%7Cred)
-- Disk Logical Writes ![image](http://registry.my-netdata.io/api/v1/badge.svg?chart=apps.lwrites&dimensions=sql&value_color=green%3C100%7Corange%3C1000%7Cred)
-- Open Files ![image](http://registry.my-netdata.io/api/v1/badge.svg?chart=apps.files&dimensions=sql&value_color=green%3E30%7Cred)
-- Real Memory ![image](http://registry.my-netdata.io/api/v1/badge.svg?chart=apps.mem&dimensions=sql&value_color=green%3C100%7Corange%3C200%7Cred)
-- Virtual Memory ![image](http://registry.my-netdata.io/api/v1/badge.svg?chart=apps.vmem&dimensions=sql&value_color=green%3C100%7Corange%3C1000%7Cred)
-- Swap Memory ![image](http://registry.my-netdata.io/api/v1/badge.svg?chart=apps.swap&dimensions=sql&value_color=green=0%7Cred)
-- Minor Page Faults ![image](http://registry.my-netdata.io/api/v1/badge.svg?chart=apps.minor_faults&dimensions=sql&value_color=green%3C100%7Corange%3C1000%7Cred)
-- Processes ![image](http://registry.my-netdata.io/api/v1/badge.svg?chart=apps.processes&dimensions=sql&value_color=green%3E0%7Cred)
-- Threads ![image](http://registry.my-netdata.io/api/v1/badge.svg?chart=apps.threads&dimensions=sql&value_color=green%3E=28%7Cred)
-- Major Faults (swap activity) ![image](http://registry.my-netdata.io/api/v1/badge.svg?chart=apps.major_faults&dimensions=sql&value_color=green=0%7Cred)
-- Open Pipes ![image](http://registry.my-netdata.io/api/v1/badge.svg?chart=apps.pipes&dimensions=sql&value_color=green=0%7Cred)
-- Open Sockets ![image](http://registry.my-netdata.io/api/v1/badge.svg?chart=apps.sockets&dimensions=sql&value_color=green%3E=3%7Cred)
+- CPU usage: ![image](https://registry.my-netdata.io/api/v1/badge.svg?chart=apps.cpu&dimensions=sql&value_color=green=0%7Corange%3C50%7Cred)
+- Disk Physical Reads ![image](https://registry.my-netdata.io/api/v1/badge.svg?chart=apps.preads&dimensions=sql&value_color=green%3C100%7Corange%3C1000%7Cred)
+- Disk Physical Writes ![image](https://registry.my-netdata.io/api/v1/badge.svg?chart=apps.pwrites&dimensions=sql&value_color=green%3C100%7Corange%3C1000%7Cred)
+- Disk Logical Reads ![image](https://registry.my-netdata.io/api/v1/badge.svg?chart=apps.lreads&dimensions=sql&value_color=green%3C100%7Corange%3C1000%7Cred)
+- Disk Logical Writes ![image](https://registry.my-netdata.io/api/v1/badge.svg?chart=apps.lwrites&dimensions=sql&value_color=green%3C100%7Corange%3C1000%7Cred)
+- Open Files ![image](https://registry.my-netdata.io/api/v1/badge.svg?chart=apps.files&dimensions=sql&value_color=green%3E30%7Cred)
+- Real Memory ![image](https://registry.my-netdata.io/api/v1/badge.svg?chart=apps.mem&dimensions=sql&value_color=green%3C100%7Corange%3C200%7Cred)
+- Virtual Memory ![image](https://registry.my-netdata.io/api/v1/badge.svg?chart=apps.vmem&dimensions=sql&value_color=green%3C100%7Corange%3C1000%7Cred)
+- Swap Memory ![image](https://registry.my-netdata.io/api/v1/badge.svg?chart=apps.swap&dimensions=sql&value_color=green=0%7Cred)
+- Minor Page Faults ![image](https://registry.my-netdata.io/api/v1/badge.svg?chart=apps.minor_faults&dimensions=sql&value_color=green%3C100%7Corange%3C1000%7Cred)
+- Processes ![image](https://registry.my-netdata.io/api/v1/badge.svg?chart=apps.processes&dimensions=sql&value_color=green%3E0%7Cred)
+- Threads ![image](https://registry.my-netdata.io/api/v1/badge.svg?chart=apps.threads&dimensions=sql&value_color=green%3E=28%7Cred)
+- Major Faults (swap activity) ![image](https://registry.my-netdata.io/api/v1/badge.svg?chart=apps.major_faults&dimensions=sql&value_color=green=0%7Cred)
+- Open Pipes ![image](https://registry.my-netdata.io/api/v1/badge.svg?chart=apps.pipes&dimensions=sql&value_color=green=0%7Cred)
+- Open Sockets ![image](https://registry.my-netdata.io/api/v1/badge.svg?chart=apps.sockets&dimensions=sql&value_color=green%3E=3%7Cred)
 
 
 For more information about badges check [Generating Badges](../../web/api/badges)
@@ -254,7 +255,7 @@ Exactly like `top`, `htop` is providing an incomplete breakdown of the system CP
 
 ```
   CPU[||||||||||||||||||||||||100.0%]   Tasks: 27, 11 thr; 2 running
-  Mem[||||||||||||||||||||85.4M/993M]   Load average: 1.16 0.88 0.90 
+  Mem[||||||||||||||||||||85.4M/993M]   Load average: 1.16 0.88 0.90
   Swp[                         0K/0K]   Uptime: 3 days, 21:37:03
 
   PID USER      PRI  NI  VIRT   RES   SHR S CPU% MEM%   TIME+  Command
@@ -305,10 +306,10 @@ MEM  [ 23.7%]   user:    30.9%   total:   993M   total:       0   1 min:    1.18
 SWAP [  0.0%]   system:  67.8%   used:    236M   used:        0   5 min:    1.08
                 idle:     0.0%   free:    757M   free:        0   15 min:   1.00
 
-NETWORK     Rx/s   Tx/s   TASKS  75 (90 thr), 1 run, 74 slp, 0 oth 
+NETWORK     Rx/s   Tx/s   TASKS  75 (90 thr), 1 run, 74 slp, 0 oth
 eth0        168b    2Kb
-eth1          0b     0b     CPU%  MEM%   PID USER        NI S Command 
-lo            0b     0b     13.5   0.4 12789 root         0 S -bash 
+eth1          0b     0b     CPU%  MEM%   PID USER        NI S Command
+lo            0b     0b     13.5   0.4 12789 root         0 S -bash
                              1.6   2.2  7025 root         0 R /usr/bin/python /u
 DISK I/O     R/s    W/s      1.0   0.0     9 root         0 S rcuos/0
 vda1           0     4K      0.3   0.2  7024 netdata      0 S /usr/libexec/netda
@@ -370,3 +371,5 @@ It is even trickier, because walking through the entire process tree takes some 
 if you sum the CPU utilization of all processes, you might have more CPU time than the reported
 total cpu time of the system. netdata solves this, by adapting the per process cpu utilization to
 the total of the system. [Netdata adds charts that document this normalization](https://london.my-netdata.io/default.html#menu_netdata_submenu_apps_plugin).
+
+[![analytics](https://www.google-analytics.com/collect?v=1&aip=1&t=pageview&_s=1&ds=github&dr=https%3A%2F%2Fgithub.com%2Fnetdata%2Fnetdata&dl=https%3A%2F%2Fmy-netdata.io%2Fgithub%2Fcollectors%2Fapps.plugin%2FREADME&_u=MAC~&cid=5792dfd7-8dc4-476b-af31-da2fdb9f93d2&tid=UA-64295674-3)]()

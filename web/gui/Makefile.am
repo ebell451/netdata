@@ -77,7 +77,6 @@ dist_weblib_DATA = \
 	lib/bootstrap-table-export-1.11.0.min.js \
 	lib/bootstrap-toggle-2.2.2.min.js \
 	lib/clipboard-polyfill-be05dad.js \
-	lib/c3-0.4.18.min.js \
 	lib/d3-4.12.2.min.js \
 	lib/d3pie-0.2.1-netdata-3.js \
 	lib/dygraph-c91c859.min.js \
@@ -89,10 +88,8 @@ dist_weblib_DATA = \
 	lib/jquery.peity-3.2.0.min.js \
 	lib/jquery.sparkline-2.1.2.min.js \
 	lib/lz-string-1.4.4.min.js \
-	lib/morris-0.5.1.min.js \
 	lib/pako-1.0.6.min.js \
 	lib/perfect-scrollbar-0.6.15.min.js \
-	lib/raphael-2.2.4-min.js \
 	lib/tableExport-1.6.0.min.js \
 	$(NULL)
 
@@ -118,6 +115,7 @@ dist_webfonts_DATA = \
 
 webimagesdir=$(webdir)/images
 dist_webimages_DATA = \
+	images/netdata-logomark.svg \
 	images/alert-128-orange.png \
 	images/alert-128-red.png \
 	images/alert-multi-size-orange.ico \
@@ -127,18 +125,32 @@ dist_webimages_DATA = \
 	images/check-mark-2-multi-size-green.ico \
 	images/netdata.svg \
 	images/post.png \
-	images/seo-performance-16.png \
-	images/seo-performance-24.png \
-	images/seo-performance-32.png \
-	images/seo-performance-48.png \
-	images/seo-performance-64.png \
-	images/seo-performance-72.png \
-	images/seo-performance-114.png \
-	images/seo-performance-128.png \
-	images/seo-performance-256.png \
-	images/seo-performance-512.png \
-	images/seo-performance-multi-size.ico \
-	images/seo-performance-multi-size.icns \
+	images/android-icon-36x36.png \
+	images/android-icon-48x48.png \
+	images/android-icon-72x72.png \
+	images/android-icon-96x96.png \
+	images/android-icon-144x144.png \
+	images/android-icon-192x192.png \
+    images/apple-icon-57x57.png \
+    images/apple-icon-60x60.png \
+    images/apple-icon-72x72.png \
+    images/apple-icon-76x76.png \
+    images/apple-icon-114x114.png \
+    images/apple-icon-120x120.png \
+    images/apple-icon-144x144.png \
+    images/apple-icon-152x152.png \
+    images/apple-icon-180x180.png \
+    images/apple-icon-precomposed.png \
+    images/apple-icon.png \
+    images/favicon-16x16.png \
+    images/favicon-32x32.png \
+    images/favicon-96x96.png \
+    images/favicon.ico \
+    images/ms-icon-70x70.png \
+    images/ms-icon-144x144.png \
+    images/ms-icon-150x150.png \
+    images/ms-icon-310x310.png \
+	images/banner-icon-144x144.png \
 	$(NULL)
 
 dashboard.js: $(DASHBOARD_JS_FILES)

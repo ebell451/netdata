@@ -16,12 +16,11 @@ dist_noinst_DATA = \
 
 userhealthconfigdir=$(configdir)/health.d
 dist_userhealthconfig_DATA = \
-    $(top_srcdir)/installer/.keep \
+    .keep \
     $(NULL)
 
 healthconfigdir=$(libconfigdir)/health.d
 dist_healthconfig_DATA = \
-    $(top_srcdir)/installer/.keep \
     health.d/adaptec_raid.conf \
     health.d/apache.conf \
     health.d/apcupsd.conf \
@@ -32,6 +31,7 @@ dist_healthconfig_DATA = \
     health.d/boinc.conf \
     health.d/btrfs.conf \
     health.d/ceph.conf \
+    health.d/cgroups.conf \
     health.d/cpu.conf \
     health.d/couchdb.conf \
     health.d/disks.conf \

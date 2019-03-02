@@ -29,12 +29,11 @@ dist_python_DATA = \
 
 userpythonconfigdir=$(configdir)/python.d
 dist_userpythonconfig_DATA = \
-    $(top_srcdir)/installer/.keep \
+    .keep \
     $(NULL)
 
 pythonconfigdir=$(libconfigdir)/python.d
 dist_pythonconfig_DATA = \
-    $(top_srcdir)/installer/.keep \
     $(NULL)
 
 include adaptec_raid/Makefile.inc
@@ -74,9 +73,12 @@ include monit/Makefile.inc
 include mysql/Makefile.inc
 include nginx/Makefile.inc
 include nginx_plus/Makefile.inc
+include nvidia_smi/Makefile.inc
 include nsd/Makefile.inc
 include ntpd/Makefile.inc
 include ovpn_status_log/Makefile.inc
+include openldap/Makefile.inc
+include oracledb/Makefile.inc
 include phpfpm/Makefile.inc
 include portcheck/Makefile.inc
 include postfix/Makefile.inc

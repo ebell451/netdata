@@ -1,5 +1,6 @@
+# Messagebird
 
-Will look like this on your Android device:
+The messagebird notifications will look like this on your Android device:
 
 ![image](https://cloud.githubusercontent.com/assets/17090999/20034652/620b6100-a39b-11e6-96af-4f83b8e830e2.png)
 
@@ -36,3 +37,5 @@ MESSAGEBIRD_NUMBER="XXXXXXX"
 DEFAULT_RECIPIENT_MESSAGEBIRD="XXXXXXX"
 
 ```
+
+[![analytics](https://www.google-analytics.com/collect?v=1&aip=1&t=pageview&_s=1&ds=github&dr=https%3A%2F%2Fgithub.com%2Fnetdata%2Fnetdata&dl=https%3A%2F%2Fmy-netdata.io%2Fgithub%2Fhealth%2Fnotifications%2Fmessagebird%2FREADME&_u=MAC~&cid=5792dfd7-8dc4-476b-af31-da2fdb9f93d2&tid=UA-64295674-3)]()

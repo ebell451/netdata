@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+// Codacy declarations
+/* global NETDATA */
+
 var netdataDashboard = window.netdataDashboard || {};
 
 // Informational content for the various sections of the GUI (menus, sections, charts, etc.)
@@ -31,7 +34,7 @@ netdataDashboard.menu = {
         title: 'Quality of Service',
         icon: '<i class="fas fa-globe"></i>',
         info: 'Netdata collects and visualizes <code>tc</code> class utilization using its ' +
-            '<a href="https://github.com/netdata/netdata/blob/master/plugins.d/tc-qos-helper.sh" target="_blank">tc-helper plugin</a>. ' +
+            '<a href="https://github.com/netdata/netdata/blob/master/collectors/tc.plugin/tc-qos-helper.sh.in" target="_blank">tc-helper plugin</a>. ' +
             'If you also use <a href="http://firehol.org/#fireqos" target="_blank">FireQOS</a> for setting up QoS, ' +
             'netdata automatically collects interface and class names. If your QoS configuration includes overheads ' +
             'calculation, the values shown here will include these overheads (the total bandwidth for the same ' +
@@ -436,10 +439,10 @@ netdataDashboard.menu = {
         info: undefined
     },
 
-    'linux_power_supply': {
+    'powersupply': {
         title: 'Power Supply',
         icon: '<i class="fas fa-battery-half"></i>',
-        info: 'Statistics for the various system power supplies.'
+        info: 'Statistics for the various system power supplies. Data collected from <a href="https://www.kernel.org/doc/Documentation/power/power_supply_class.txt">Linux power supply class</a>.'
     }
 };
 
@@ -615,6 +618,10 @@ netdataDashboard.submenu = {
 // colors: the dimension colors of the chart (the default colors are appended)
 // height: the ratio of the chart height relative to the default
 //
+
+var cgroupCPULimitIsSet = 0;
+var cgroupMemLimitIsSet = 0;
+
 netdataDashboard.context = {
     'system.cpu': {
         info: function (os) {
@@ -647,7 +654,7 @@ netdataDashboard.context = {
     },
 
     'system.swapio': {
-        info: 'Total Swap I/O. (netdata measures both <code>in</code> and <code>out</code>. If either of them is not shown in the chart, it is because it is zero - you can change the page settings to always render all the available dimensions on all charts).'
+        info: 'Total Swap I/O. (netdata measures both <code>in</code> and <code>out</code>. If either of the metrics <code>in</code> or <code>out</code> is not shown in the chart, the reason is that the metric is zero. - you can change the page settings to always render all the available dimensions on all charts).'
     },
 
     'system.pgfaults': {
@@ -892,7 +899,7 @@ netdataDashboard.context = {
     },
 
     'apps.vmem': {
-        info: 'Virtual memory allocated by applications. Please check <a href="https://github.com/netdata/netdata/wiki/netdata-virtual-memory-size" target="_blank">this article</a> for more information.'
+        info: 'Virtual memory allocated by applications. Please check <a href="https://github.com/netdata/netdata/tree/master/daemon#virtual-memory" target="_blank">this article</a> for more information.'
     },
 
     'apps.preads': {
@@ -915,7 +922,7 @@ netdataDashboard.context = {
     },
 
     'users.vmem': {
-        info: 'Virtual memory allocated per user. Please check <a href="https://github.com/netdata/netdata/wiki/netdata-virtual-memory-size" target="_blank">this article</a> for more information.'
+        info: 'Virtual memory allocated per user. Please check <a href="https://github.com/netdata/netdata/tree/master/daemon#virtual-memory" target="_blank">this article</a> for more information.'
     },
 
     'users.preads': {
@@ -938,7 +945,7 @@ netdataDashboard.context = {
     },
 
     'groups.vmem': {
-        info: 'Virtual memory allocated per user group. Please check <a href="https://github.com/netdata/netdata/wiki/netdata-virtual-memory-size" target="_blank">this article</a> for more information.'
+        info: 'Virtual memory allocated per user group. Please check <a href="https://github.com/netdata/netdata/tree/master/daemon#virtual-memory" target="_blank">this article</a> for more information.'
     },
 
     'groups.preads': {
@@ -1413,11 +1420,15 @@ netdataDashboard.context = {
     // ------------------------------------------------------------------------
     // containers
 
-    'cgroup.cpu': {
+    'cgroup.cpu_limit': {
+        valueRange: "[0, null]",
         mainheads: [
             function (os, id) {
                 void(os);
+                cgroupCPULimitIsSet = 1;
                 return '<div data-netdata="' + id + '"'
+                    + ' data-dimensions="used"'
+                    + ' data-gauge-max-value="100"'
                     + ' data-chart-library="gauge"'
                     + ' data-title="CPU"'
                     + ' data-units="%"'
@@ -1432,14 +1443,41 @@ netdataDashboard.context = {
         ]
     },
 
-    'cgroup.mem_usage': {
+    'cgroup.cpu': {
         mainheads: [
             function (os, id) {
                 void(os);
+                if (cgroupCPULimitIsSet === 0) {
+                    return '<div data-netdata="' + id + '"'
+                        + ' data-chart-library="gauge"'
+                        + ' data-title="CPU"'
+                        + ' data-units="%"'
+                        + ' data-gauge-adjust="width"'
+                        + ' data-width="12%"'
+                        + ' data-before="0"'
+                        + ' data-after="-CHART_DURATION"'
+                        + ' data-points="CHART_DURATION"'
+                        + ' data-colors="' + NETDATA.colors[4] + '"'
+                        + ' role="application"></div>';
+                }
+                else
+                    return '';
+            }
+        ]
+    },
+
+    'cgroup.mem_usage_limit': {
+        mainheads: [
+            function (os, id) {
+                void(os);
+                cgroupMemLimitIsSet = 1;
                 return '<div data-netdata="' + id + '"'
+                    + ' data-dimensions="used"'
+                    + ' data-append-options="percentage"'
+                    + ' data-gauge-max-value="100"'
                     + ' data-chart-library="gauge"'
                     + ' data-title="Memory"'
-                    + ' data-units="MB"'
+                    + ' data-units="%"'
                     + ' data-gauge-adjust="width"'
                     + ' data-width="12%"'
                     + ' data-before="0"'
@@ -1447,6 +1485,29 @@ netdataDashboard.context = {
                     + ' data-points="CHART_DURATION"'
                     + ' data-colors="' + NETDATA.colors[1] + '"'
                     + ' role="application"></div>';
+            }
+        ]
+    },
+
+    'cgroup.mem_usage': {
+        mainheads: [
+            function (os, id) {
+                void(os);
+                if (cgroupMemLimitIsSet === 0) {
+                    return '<div data-netdata="' + id + '"'
+                        + ' data-chart-library="gauge"'
+                        + ' data-title="Memory"'
+                        + ' data-units="MB"'
+                        + ' data-gauge-adjust="width"'
+                        + ' data-width="12%"'
+                        + ' data-before="0"'
+                        + ' data-after="-CHART_DURATION"'
+                        + ' data-points="CHART_DURATION"'
+                        + ' data-colors="' + NETDATA.colors[1] + '"'
+                        + ' role="application"></div>';
+                }
+                else
+                    return '';
             }
         ]
     },
@@ -2021,7 +2082,7 @@ netdataDashboard.context = {
     },
 
     'btrfs.disk': {
-        info: 'Physical disk usage of BTRFS. The disk space reported here is the raw physical disk space assigned to the BTRFS volume (i.e. <b>before any RAID levels</b>). BTRFS uses a two-stage allocator, first allocating large regions of disk space for one type of block (data, metadata, or system), and then using a regular block allocator inside those regions. <code>unallocated</code> is the physical disk space that is not allocated yet and is available to become data, metdata or system on demand. When <code>unallocated</code> is zero, all available disk space has been allocated to a specific function. Healthy volumes should ideally have at least five percent of their total space <code>unallocated</code>. You can keep your volume healthy by running the <code>btrfs balance</code> command on it regularly (check <code>man btrfs-balance</code> for more info).  Note that some of the spac elisted as <code>unallocated</code> may not actually be usable if the volume uses devices of different sizes.',
+        info: 'Physical disk usage of BTRFS. The disk space reported here is the raw physical disk space assigned to the BTRFS volume (i.e. <b>before any RAID levels</b>). BTRFS uses a two-stage allocator, first allocating large regions of disk space for one type of block (data, metadata, or system), and then using a regular block allocator inside those regions. <code>unallocated</code> is the physical disk space that is not allocated yet and is available to become data, metdata or system on demand. When <code>unallocated</code> is zero, all available disk space has been allocated to a specific function. Healthy volumes should ideally have at least five percent of their total space <code>unallocated</code>. You can keep your volume healthy by running the <code>btrfs balance</code> command on it regularly (check <code>man btrfs-balance</code> for more info).  Note that some of the space listed as <code>unallocated</code> may not actually be usable if the volume uses devices of different sizes.',
         colors: [NETDATA.colors[12]]
     },
 
@@ -2315,6 +2376,25 @@ netdataDashboard.context = {
 
     'proxysql.commands_duration': {
         info: 'The total time spent executing commands of that type, in ms'
+    },
+
+    // ------------------------------------------------------------------------
+    // Power Supplies
+
+    'powersupply.capacity': {
+        info: undefined
+    },
+
+    'powersupply.charge': {
+        info: undefined
+    },
+
+    'powersupply.energy': {
+        info: undefined
+    },
+
+    'powersupply.voltage': {
+        info: undefined
     }
 
     // ------------------------------------------------------------------------

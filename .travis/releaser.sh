@@ -21,55 +21,54 @@
 # Requirements:
 #   - GITHUB_TOKEN variable set with GitHub token. Access level: repo.public_repo
 #   - docker
-#   - git-semver python package (pip install git-semver)
 
 set -e
 
-if [ ! -f .gitignore ]
-then
-  echo "Run as ./travis/$(basename "$0") from top level directory of git repository"
-  exit 1
+if [ ! -f .gitignore ]; then
+	echo "Run as ./travis/$(basename "$0") from top level directory of git repository"
+	exit 1
 fi
+
+export GIT_MAIL="bot@netdata.cloud"
+export GIT_USER="netdatabot"
+echo "--- Initialize git configuration ---"
+git config user.email "${GIT_MAIL}"
+git config user.name "${GIT_USER}"
+git checkout master
+git pull
 
 echo "---- FIGURING OUT TAGS ----"
-# Check if current commit is tagged or not
-GIT_TAG=$(git tag --points-at)
-if [ -z "${GIT_TAG}" ]; then
-  git semver
-  # Figure out next tag based on commit message
-  GIT_TAG=HEAD
-  echo "Last commit message: $TRAVIS_COMMIT_MESSAGE"
-  case "${TRAVIS_COMMIT_MESSAGE}" in
-    *"[netdata patch release]"* ) GIT_TAG="v$(git semver --next-patch)" ;;
-    *"[netdata minor release]"* ) GIT_TAG="v$(git semver --next-minor)" ;;
-    *"[netdata major release]"* ) GIT_TAG="v$(git semver --next-major)" ;;
-    *) echo "Keyword not detected. Doing nothing" ;;
-  esac
+# tagger.sh is sourced since we need environment variables it sets
+#shellcheck source=/dev/null
+source .travis/tagger.sh || exit 0
+# variable GIT_TAG is produced by tagger.sh script
 
-  # Tag it!
-  if [ "$GIT_TAG" != "HEAD" ]; then
-      echo "Assigning a new tag: $GIT_TAG"
-      git tag "$GIT_TAG" -a -m "Automatic tag generation for travis build no. $TRAVIS_BUILD_NUMBER"
-      # git is able to push due to configuration already being initialized in `generate_changelog.sh` script
-      git push "https://${GITHUB_TOKEN}:@$(git config --get remote.origin.url | sed -e 's/^https:\/\///')" --tags
-  fi
-fi
+echo "---- UPDATE VERSION FILE ----"
+echo "$GIT_TAG" >packaging/version
+git add packaging/version
 
-if [ "${GIT_TAG}" == "HEAD" ]; then
-    echo "Not creating a release since neither of two conditions was met:"
-    echo "  - keyword in commit message"
-    echo "  - commit is tagged"
-    exit 0
-fi
-
-echo "---- GENERATING CHANGELOG -----"
+echo "---- GENERATE CHANGELOG -----"
 ./.travis/generate_changelog.sh
+git add CHANGELOG.md
+
+echo "---- COMMIT AND PUSH CHANGES ----"
+git commit -m "[ci skip] release $GIT_TAG"
+git tag "$GIT_TAG" -a -m "Automatic tag generation for travis build no. $TRAVIS_BUILD_NUMBER"
+git push "https://${GITHUB_TOKEN}:@$(git config --get remote.origin.url | sed -e 's/^https:\/\///')"
+git push "https://${GITHUB_TOKEN}:@$(git config --get remote.origin.url | sed -e 's/^https:\/\///')" --tags
+# After those operations output of command `git describe` should be identical with a value of GIT_TAG
+
+if [[ $(git describe) =~ -rc* ]]; then
+	echo "This is a release candidate tag, exiting without artifact building"
+	exit 0
+fi
 
 echo "---- CREATING TAGGED DOCKER CONTAINERS ----"
 export REPOSITORY="netdata/netdata"
-./docker/build.sh
+./packaging/docker/build.sh
 
 echo "---- CREATING RELEASE ARTIFACTS -----"
+# Artifacts are stored in `artifacts/` directory
 ./.travis/create_artifacts.sh
 
 echo "---- CREATING RELEASE DRAFT WITH ASSETS -----"
@@ -80,4 +79,18 @@ tar -C /tmp -xvf "/tmp/hub-linux-amd64-${HUB_VERSION}.tgz"
 export PATH=$PATH:"/tmp/hub-linux-amd64-${HUB_VERSION}/bin"
 
 # Create a release draft
-hub release create --draft -a "netdata-${GIT_TAG}.tar.gz" -a "netdata-${GIT_TAG}.gz.run" -a "sha256sums.txt" -m "${GIT_TAG}" "${GIT_TAG}"
+if [ -z ${GIT_TAG+x} ]; then
+	echo "Variable GIT_TAG is not set. Something went terribly wrong! Exiting."
+	exit 1
+fi
+if [ "${GIT_TAG}" != "$(git tag --points-at)" ]; then
+	echo "ERROR! Current commit is not tagged. Stopping release creation."
+	exit 1
+fi
+until hub release create --draft \
+		-a "artifacts/netdata-${GIT_TAG}.tar.gz" \
+		-a "artifacts/netdata-${GIT_TAG}.gz.run" \
+		-a "artifacts/sha256sums.txt" \
+		-m "${GIT_TAG}" "${GIT_TAG}"; do
+	sleep 5
+done

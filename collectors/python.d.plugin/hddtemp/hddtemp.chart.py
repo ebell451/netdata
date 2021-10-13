@@ -1,16 +1,14 @@
 # -*- coding: utf-8 -*-
 # Description: hddtemp netdata python.d module
 # Author: Pawel Krupa (paulfantom)
-# Author: Ilya Mashchenko (l2isbad)
+# Author: Ilya Mashchenko (ilyam8)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
 import re
-
 from copy import deepcopy
 
 from bases.FrameworkServices.SocketService import SocketService
-
 
 ORDER = [
     'temperatures',
@@ -30,7 +28,7 @@ class Disk:
     def __init__(self, id_, name, temp):
         self.id = id_.split('/')[-1]
         self.name = name.replace(' ', '_')
-        self.temp = temp if temp.isdigit() else 0
+        self.temp = temp if temp.isdigit() else None
 
     def __repr__(self):
         return self.id

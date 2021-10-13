@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Description:
-# Author: Ilya Mashchenko (l2isbad)
+# Author: Ilya Mashchenko (ilyam8)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from bases.collection import safe_print
@@ -16,16 +16,15 @@ CHART_BEGIN = 'BEGIN {type}.{id} {since_last}\n'
 CHART_CREATE = "CHART {type}.{id} '{name}' '{title}' '{units}' '{family}' '{context}' " \
                "{chart_type} {priority} {update_every} '{hidden}' 'python.d.plugin' '{module_name}'\n"
 CHART_OBSOLETE = "CHART {type}.{id} '{name}' '{title}' '{units}' '{family}' '{context}' " \
-               "{chart_type} {priority} {update_every} '{hidden} obsolete'\n"
+                 "{chart_type} {priority} {update_every} '{hidden} obsolete'\n"
 
-
-DIMENSION_CREATE = "DIMENSION '{id}' '{name}' {algorithm} {multiplier} {divisor} '{hidden}'\n"
+DIMENSION_CREATE = "DIMENSION '{id}' '{name}' {algorithm} {multiplier} {divisor} '{hidden} {obsolete}'\n"
 DIMENSION_SET = "SET '{id}' = {value}\n"
 
 CHART_VARIABLE_SET = "VARIABLE CHART '{id}' = {value}\n"
 
 RUNTIME_CHART_CREATE = "CHART netdata.runtime_{job_name} '' 'Execution time for {job_name}' 'ms' 'python.d' " \
-                       "netdata.pythond_runtime line 145000 {update_every}\n" \
+                       "netdata.pythond_runtime line 145000 {update_every} '' 'python.d.plugin' '{module_name}'\n" \
                        "DIMENSION run_time 'run time' absolute 1 1\n"
 
 
@@ -40,13 +39,18 @@ def create_runtime_chart(func):
     :param func: class method
     :return:
     """
+
     def wrapper(*args, **kwargs):
         self = args[0]
+        chart = RUNTIME_CHART_CREATE.format(
+            job_name=self.name,
+            update_every=self._runtime_counters.update_every,
+            module_name=self.module_name,
+        )
+        safe_print(chart)
         ok = func(*args, **kwargs)
-        if ok:
-            safe_print(RUNTIME_CHART_CREATE.format(job_name=self.name,
-                                                   update_every=self._runtime_counters.update_every))
         return ok
+
     return wrapper
 
 
@@ -72,6 +76,7 @@ class Charts:
     All charts stored in a dict.
     Chart is a instance of Chart class.
     Charts adding must be done using Charts.add_chart() method only"""
+
     def __init__(self, job_name, priority, cleanup, get_update_every, module_name):
         """
         :param job_name: <bound method>
@@ -138,6 +143,7 @@ class Charts:
 
 class Chart:
     """Represent a chart"""
+
     def __init__(self, params):
         """
         :param params: <list>
@@ -200,12 +206,24 @@ class Chart:
         self.dimensions.append(dim)
         return dim
 
+    def del_dimension(self, dimension_id, hide=True):
+        if dimension_id not in self:
+            return
+        idx = self.dimensions.index(dimension_id)
+        dimension = self.dimensions[idx]
+        if hide:
+            dimension.params['hidden'] = 'hidden'
+        dimension.params['obsolete'] = 'obsolete'
+        self.create()
+        self.dimensions.remove(dimension)
+
     def hide_dimension(self, dimension_id, reverse=False):
-        if dimension_id in self:
-            idx = self.dimensions.index(dimension_id)
-            dimension = self.dimensions[idx]
-            dimension.params['hidden'] = 'hidden' if not reverse else str()
-            self.refresh()
+        if dimension_id not in self:
+            return
+        idx = self.dimensions.index(dimension_id)
+        dimension = self.dimensions[idx]
+        dimension.params['hidden'] = 'hidden' if not reverse else str()
+        self.refresh()
 
     def create(self):
         """
@@ -269,6 +287,7 @@ class Chart:
 
 class Dimension:
     """Represent a dimension"""
+
     def __init__(self, params):
         """
         :param params: <list>
@@ -288,6 +307,7 @@ class Dimension:
         if not isinstance(self.params.get('divisor'), int):
             self.params['divisor'] = 1
         self.params.setdefault('hidden', '')
+        self.params.setdefault('obsolete', '')
 
     def __getattr__(self, item):
         try:
@@ -333,6 +353,7 @@ class Dimension:
 
 class ChartVariable:
     """Represent a chart variable"""
+
     def __init__(self, params):
         """
         :param params: <list>

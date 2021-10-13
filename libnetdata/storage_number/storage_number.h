@@ -55,12 +55,14 @@ typedef long double collected_number;
 
 #define calculated_number_equal(a, b) (calculated_number_fabs((a) - (b)) < calculated_number_epsilon)
 
+#define calculated_number_isnumber(a) (!(fpclassify(a) & (FP_NAN|FP_INFINITE)))
+
 typedef uint32_t storage_number;
 #define STORAGE_NUMBER_FORMAT "%u"
 
 #define SN_EXISTS           (1 << 24) // the value exists
 #define SN_EXISTS_RESET     (1 << 25) // the value has been overflown
-#define SN_EXISTS_100       (1 << 26) // very large value (multipler is 100 instead of 10)
+#define SN_EXISTS_100       (1 << 26) // very large value (multiplier is 100 instead of 10)
 
 // extract the flags
 #define get_storage_number_flags(value) ((((storage_number)(value)) & (1 << 24)) | (((storage_number)(value)) & (1 << 25)) | (((storage_number)(value)) & (1 << 26)))
@@ -84,5 +86,9 @@ int print_calculated_number(char *str, calculated_number value);
 // accepted accuracy loss
 #define ACCURACY_LOSS_ACCEPTED_PERCENT 0.0001
 #define accuracy_loss(t1, t2) (((t1) == (t2) || (t1) == 0.0 || (t2) == 0.0) ? 0.0 : (100.0 - (((t1) > (t2)) ? ((t2) * 100.0 / (t1) ) : ((t1) * 100.0 / (t2)))))
+
+// Maximum acceptable rate of increase for counters. With a rate of 10% netdata can safely detect overflows with a
+// period of at least every other 10 samples.
+#define MAX_INCREMENTAL_PERCENT_RATE 10
 
 #endif /* NETDATA_STORAGE_NUMBER_H */

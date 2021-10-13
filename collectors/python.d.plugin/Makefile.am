@@ -29,43 +29,49 @@ dist_python_DATA = \
 
 userpythonconfigdir=$(configdir)/python.d
 dist_userpythonconfig_DATA = \
-    .keep \
     $(NULL)
+
+# Explicitly install directories to avoid permission issues due to umask
+install-exec-local:
+	$(INSTALL) -d $(DESTDIR)$(userpythonconfigdir)
 
 pythonconfigdir=$(libconfigdir)/python.d
 dist_pythonconfig_DATA = \
     $(NULL)
 
 include adaptec_raid/Makefile.inc
+include alarms/Makefile.inc
+include am2320/Makefile.inc
+include anomalies/Makefile.inc
 include apache/Makefile.inc
 include beanstalk/Makefile.inc
 include bind_rndc/Makefile.inc
 include boinc/Makefile.inc
 include ceph/Makefile.inc
+include changefinder/Makefile.inc
 include chrony/Makefile.inc
 include couchdb/Makefile.inc
-include cpufreq/Makefile.inc
-include cpuidle/Makefile.inc
 include dnsdist/Makefile.inc
 include dns_query_time/Makefile.inc
 include dockerd/Makefile.inc
 include dovecot/Makefile.inc
 include elasticsearch/Makefile.inc
+include energid/Makefile.inc
 include example/Makefile.inc
 include exim/Makefile.inc
 include fail2ban/Makefile.inc
 include freeradius/Makefile.inc
+include gearman/Makefile.inc
 include go_expvar/Makefile.inc
 include haproxy/Makefile.inc
 include hddtemp/Makefile.inc
 include httpcheck/Makefile.inc
+include hpssa/Makefile.inc
 include icecast/Makefile.inc
 include ipfs/Makefile.inc
 include isc_dhcpd/Makefile.inc
-include linux_power_supply/Makefile.inc
 include litespeed/Makefile.inc
 include logind/Makefile.inc
-include mdstat/Makefile.inc
 include megacli/Makefile.inc
 include memcached/Makefile.inc
 include mongodb/Makefile.inc
@@ -90,6 +96,7 @@ include rabbitmq/Makefile.inc
 include redis/Makefile.inc
 include rethinkdbs/Makefile.inc
 include retroshare/Makefile.inc
+include riakkv/Makefile.inc
 include samba/Makefile.inc
 include sensors/Makefile.inc
 include smartd_log/Makefile.inc
@@ -99,11 +106,11 @@ include squid/Makefile.inc
 include tomcat/Makefile.inc
 include tor/Makefile.inc
 include traefik/Makefile.inc
-include unbound/Makefile.inc
 include uwsgi/Makefile.inc
 include varnish/Makefile.inc
 include w1sensor/Makefile.inc
 include web_log/Makefile.inc
+include zscores/Makefile.inc
 
 pythonmodulesdir=$(pythondir)/python_modules
 dist_pythonmodules_DATA = \
@@ -138,6 +145,7 @@ dist_third_party_DATA = \
     python_modules/third_party/mcrcon.py \
     python_modules/third_party/boinc_client.py \
     python_modules/third_party/monotonic.py \
+    python_modules/third_party/filelock.py \
     $(NULL)
 
 pythonyaml2dir=$(pythonmodulesdir)/pyyaml2

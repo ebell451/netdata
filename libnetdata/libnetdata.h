@@ -3,6 +3,10 @@
 #ifndef NETDATA_LIB_H
 #define NETDATA_LIB_H 1
 
+# ifdef __cplusplus
+extern "C" {
+# endif
+
 #ifdef HAVE_CONFIG_H
 #include <config.h>
 #endif
@@ -65,6 +69,7 @@
 #include <getopt.h>
 #include <grp.h>
 #include <pwd.h>
+#include <limits.h>
 #include <locale.h>
 #include <net/if.h>
 #include <poll.h>
@@ -81,6 +86,9 @@
 #include <time.h>
 #include <unistd.h>
 #include <uuid/uuid.h>
+#include <spawn.h>
+#include <uv.h>
+#include <assert.h>
 
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
@@ -108,6 +116,10 @@
 
 #ifdef HAVE_SYS_STATFS_H
 #include <sys/statfs.h>
+#endif
+
+#ifdef HAVE_LINUX_MAGIC_H
+#include <linux/magic.h>
 #endif
 
 #ifdef HAVE_SYS_MOUNT_H
@@ -197,10 +209,9 @@
 #define WARNUNUSED
 #endif
 
-#ifdef abs
-#undef abs
-#endif
-#define abs(x) (((x) < 0)? (-(x)) : (x))
+#define ABS(x) (((x) < 0)? (-(x)) : (x))
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
 
 #define GUID_LEN 36
 
@@ -271,6 +282,8 @@ extern void recursive_config_double_dir_load(
         , void *data
         , size_t depth
 );
+extern char *read_by_filename(char *filename, long *file_size);
+extern char *find_and_replace(const char *src, const char *find, const char *replace, const char *where);
 
 /* fix for alpine linux */
 #ifndef RUSAGE_THREAD
@@ -279,8 +292,12 @@ extern void recursive_config_double_dir_load(
 #endif
 #endif
 
-#define BITS_IN_A_KILOBIT 1000
+#define BITS_IN_A_KILOBIT     1000
+#define KILOBITS_IN_A_MEGABIT 1000
 
+/* misc. */
+#define UNUSED(x) (void)(x)
+#define error_report(x, args...) do { errno = 0; error(x, ##args); } while(0)
 
 extern void netdata_cleanup_and_exit(int ret) NORETURN;
 extern void send_statistics(const char *action, const char *action_result, const char *action_data);
@@ -290,19 +307,36 @@ extern char *netdata_configured_host_prefix;
 #include "threads/threads.h"
 #include "buffer/buffer.h"
 #include "locks/locks.h"
+#include "circular_buffer/circular_buffer.h"
 #include "avl/avl.h"
 #include "inlined.h"
 #include "clocks/clocks.h"
 #include "popen/popen.h"
 #include "simple_pattern/simple_pattern.h"
+#ifdef ENABLE_HTTPS
+# include "socket/security.h"
+#endif
 #include "socket/socket.h"
 #include "config/appconfig.h"
 #include "log/log.h"
 #include "procfile/procfile.h"
 #include "dictionary/dictionary.h"
+#if defined(HAVE_LIBBPF) && !defined(__cplusplus)
+#include "ebpf/ebpf.h"
+#endif
 #include "eval/eval.h"
 #include "statistical/statistical.h"
 #include "adaptive_resortable_list/adaptive_resortable_list.h"
 #include "url/url.h"
+#include "json/json.h"
+#include "health/health.h"
+#include "string/utf8.h"
+
+// BEWARE: Outside of the C code this also exists in alarm-notify.sh
+#define DEFAULT_CLOUD_BASE_URL "https://app.netdata.cloud"
+
+# ifdef __cplusplus
+}
+# endif
 
 #endif // NETDATA_LIB_H

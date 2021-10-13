@@ -71,6 +71,7 @@ var urlOptions = {
     alarm_unique_id: 0,
     alarm_id: 0,
     alarm_event_id: 0,
+    alarm_when: 0,
 
     hasProperty: function (property) {
         // console.log('checking property ' + property + ' of type ' + typeof(this[property]));
@@ -139,7 +140,7 @@ var urlOptions = {
             }
         }
 
-        var numeric = ['after', 'before', 'highlight_after', 'highlight_before'];
+        var numeric = ['after', 'before', 'highlight_after', 'highlight_before', 'alarm_when'];
         len = numeric.length;
         while (len--) {
             if (typeof urlOptions[numeric[len]] === 'string') {
@@ -151,6 +152,22 @@ var urlOptions = {
                     urlOptions[numeric[len]] = 0;
                 }
             }
+        }
+
+        if (urlOptions.alarm_when) {
+            // if alarm_when exists, create after/before params
+            // -/+ 2 minutes from the alarm, and reload the page
+            const alarmTime = new Date(urlOptions.alarm_when * 1000).valueOf();
+            const timeMarginMs = 120000; // 2 mins
+
+            const after = alarmTime - timeMarginMs;
+            const before = alarmTime + timeMarginMs;
+            const newHash = document.location.hash.replace(
+                /;alarm_when=[0-9]*/i,
+                ";after=" + after + ";before=" + before,
+            );
+            history.replaceState(null, '', newHash);
+            location.reload();
         }
 
         if (urlOptions.server !== null && urlOptions.server !== '') {
@@ -258,7 +275,7 @@ var urlOptions = {
 
             $('.highlight-tooltip').tooltip({
                 html: true,
-                delay: {show: 500, hide: 0},
+                delay: { show: 500, hide: 0 },
                 container: 'body'
             });
         } else {
@@ -479,13 +496,29 @@ function toggleAgentItem(e, guid) {
     }
 }
 
-// When you stream metrics from netdata to netdata, the recieving netdata now
+// When you stream metrics from netdata to netdata, the receiving netdata now
 // has multiple host databases. It's own, and multiple mirrored. Mirrored databases
 // can be accessed with <http://localhost:19999/host/NAME/>
+const OLD_DASHBOARD_SUFFIX = "old"
+let isOldSuffix = true
+try {
+    const currentScriptMainJs = document.currentScript;
+    const mainJsSrc = currentScriptMainJs.getAttribute("src")
+    isOldSuffix = mainJsSrc.startsWith("../main.js")
+} catch {
+    console.warn("current script not detecting, assuming the dashboard is running with /old suffix")
+}
+
+function transformWithOldSuffix(url) {
+    return isOldSuffix ? `../${url}` : url
+}
+
 function renderStreamedHosts(options) {
     let html = `<div class="info-item">Databases streamed to this agent</div>`;
 
-    var base = document.location.origin.toString() + document.location.pathname.toString();
+    var base = document.location.origin.toString() +
+      document.location.pathname.toString()
+        .replace(isOldSuffix ? `/${OLD_DASHBOARD_SUFFIX}` : "", "");
     if (base.endsWith("/host/" + options.hostname + "/")) {
         base = base.substring(0, base.length - ("/host/" + options.hostname + "/").toString().length);
     }
@@ -495,7 +528,9 @@ function renderStreamedHosts(options) {
     }
 
     var master = options.hosts[0].hostname;
-    var sorted = options.hosts.sort(function (a, b) {
+    // We sort a clone of options.hosts, to keep the master as the first element
+    // for future calls.
+    var sorted = options.hosts.slice(0).sort(function (a, b) {
         if (a.hostname === master) {
             return -1;
         }
@@ -517,10 +552,10 @@ function renderStreamedHosts(options) {
         displayedDatabases = true;
 
         if (hostname === master) {
-            url = `${base}/`;
+            url = isOldSuffix ? `${base}/${OLD_DASHBOARD_SUFFIX}/` : `${base}/`;
             icon = 'home';
         } else {
-            url = `${base}/host/${hostname}/`;
+            url = isOldSuffix ? `${base}/host/${hostname}/${OLD_DASHBOARD_SUFFIX}/` : `${base}/host/${hostname}/`;
             icon = 'window-restore';
         }
 
@@ -586,20 +621,20 @@ function renderMachines(machinesArray) {
             const alternateUrlItems = (
                 `<div class="agent-alternate-urls agent-${machine.guid} collapsed">
                 ${machine.alternate_urls.reduce((str, url) => {
-                        if (url === maskedURL) {
-                            return str
-                        }
+                    if (url === maskedURL) {
+                        return str
+                    }
 
-                        return str + (
-                            `<div class="agent-item agent-item--alternate">
+                    return str + (
+                        `<div class="agent-item agent-item--alternate">
                                 <div></div>
                                 <a href="${url}" title="${url}">${truncateString(url, 64)}</a>
                                 <a href="#" onclick="deleteRegistryModalHandler('${machine.guid}', '${machine.name}', '${url}'); return false;">
                                     <i class="fas fa-trash" style="color: #777;"></i>
                                 </a>
                             </div>`
-                        )
-                    },
+                    )
+                },
                     ''
                 )}
                 </div>`
@@ -633,13 +668,13 @@ function renderMachines(machinesArray) {
         if (machines) {
             html += (
                 `<div class="info-item">
-                    <a href="https://github.com/netdata/netdata/tree/master/registry#netdata-registry" target="_blank">Your nodes list is empty</a>
+                    <a href="https://github.com/netdata/netdata/tree/master/registry#registry" target="_blank">Your nodes list is empty</a>
                 </div>`
             )
         } else {
             html += (
                 `<div class="info-item">
-                    <a href="https://github.com/netdata/netdata/tree/master/registry#netdata-registry" target="_blank">Failed to contact the registry</a>
+                    <a href="https://github.com/netdata/netdata/tree/master/registry#registry" target="_blank">Failed to contact the registry</a>
                 </div>`
             )
         }
@@ -648,14 +683,14 @@ function renderMachines(machinesArray) {
         html += `<div class="info-item">Demo netdata nodes</div>`;
 
         const demoServers = [
-            {url: "//london.netdata.rocks/default.html", title: "UK - London (DigitalOcean.com)"},
-            {url: "//newyork.netdata.rocks/default.html", title: "US - New York (DigitalOcean.com)"},
-            {url: "//sanfrancisco.netdata.rocks/default.html", title: "US - San Francisco (DigitalOcean.com)"},
-            {url: "//atlanta.netdata.rocks/default.html", title: "US - Atlanta (CDN77.com)"},
-            {url: "//frankfurt.netdata.rocks/default.html", title: "Germany - Frankfurt (DigitalOcean.com)"},
-            {url: "//toronto.netdata.rocks/default.html", title: "Canada - Toronto (DigitalOcean.com)"},
-            {url: "//singapore.netdata.rocks/default.html", title: "Japan - Singapore (DigitalOcean.com)"},
-            {url: "//bangalore.netdata.rocks/default.html", title: "India - Bangalore (DigitalOcean.com)"},
+            { url: "//london.netdata.rocks/default.html", title: "UK - London (DigitalOcean.com)" },
+            { url: "//newyork.netdata.rocks/default.html", title: "US - New York (DigitalOcean.com)" },
+            { url: "//sanfrancisco.netdata.rocks/default.html", title: "US - San Francisco (DigitalOcean.com)" },
+            { url: "//atlanta.netdata.rocks/default.html", title: "US - Atlanta (CDN77.com)" },
+            { url: "//frankfurt.netdata.rocks/default.html", title: "Germany - Frankfurt (DigitalOcean.com)" },
+            { url: "//toronto.netdata.rocks/default.html", title: "Canada - Toronto (DigitalOcean.com)" },
+            { url: "//singapore.netdata.rocks/default.html", title: "Japan - Singapore (DigitalOcean.com)" },
+            { url: "//bangalore.netdata.rocks/default.html", title: "India - Bangalore (DigitalOcean.com)" },
 
         ]
 
@@ -688,10 +723,9 @@ function clearMyNetdataMenu() {
 }
 
 function errorMyNetdataMenu() {
-    setMyNetdataMenu(`<div class="agent-item" style="white-space: nowrap">
+    setMyNetdataMenu(`<div class="agent-item" style="padding: 0 8px">
         <i class="fas fa-exclamation-triangle" style="color: red"></i>
-        Cannot load known netdata agents from netdata.cloud!
-        <div></div>
+        Cannot load known Netdata agents from Netdata Cloud! Please make sure you have the latest version of Netdata.
     </div>`);
 }
 
@@ -700,6 +734,14 @@ function restrictMyNetdataMenu() {
         <span>Please <a href="#" onclick="signInDidClick(event); return false">sign in to netdata.cloud</a> to view your nodes!</span>
         <div></div>
     </div>`);
+}
+
+function openAuthenticatedUrl(url) {
+    if (isSignedIn()) {
+        window.open(url);
+    } else {
+        window.open(`${NETDATA.registry.cloudBaseURL}/account/sign-in-agent?id=${NETDATA.registry.machine_guid}&name=${encodeURIComponent(NETDATA.registry.hostname)}&origin=${encodeURIComponent(window.location.origin + "/")}&redirect_uri=${encodeURIComponent(window.location.origin + "/" + url)}`);
+    }
 }
 
 function renderMyNetdataMenu(machinesArray) {
@@ -770,13 +812,18 @@ function renderMyNetdataMenu(machinesArray) {
             </div>
             <div class="agent-item">
                 <i class="fas fa-question-circle""></i>
-                <a href="https://github.com/netdata/netdata/tree/master/registry#netdata-registry" target="_blank">What is this?</a>
+                <a href="https://github.com/netdata/netdata/tree/master/registry#registry" target="_blank">What is this?</a>
                 <div></div>
             </div>`
         )
     } else {
         html += (
             `<div class="agent-item">
+                <i class="fas fa-tv"></i>
+                <a onclick="openAuthenticatedUrl('console.html');" target="_blank">Nodes<sup class="beta"> beta</sup></a>
+                <div></div>
+            </div>
+            <div class="agent-item">
                 <i class="fas fa-sync"></i>
                 <a href="#" onclick="showSyncModal(); return false">Synchronize with netdata.cloud</a>
                 <div></div>
@@ -928,7 +975,7 @@ function gotoServerModalHandler(guid) {
 
     if (!isSignedIn()) {
         // When the registry is enabled, if the user's known URLs are not working
-        // we consult the registry to get additional URLs.  
+        // we consult the registry to get additional URLs.
         setTimeout(function () {
             if (gotoServerStop === false) {
                 document.getElementById('gotoServerResponse').innerHTML = '<b>Added all the known URLs for this machine.</b>';
@@ -989,7 +1036,7 @@ function notifyForSwitchRegistry() {
     }
 }
 
-var deleteRegistryGuid = null; 
+var deleteRegistryGuid = null;
 var deleteRegistryUrl = null;
 
 function deleteRegistryModalHandler(guid, name, url) {
@@ -1002,7 +1049,7 @@ function deleteRegistryModalHandler(guid, name, url) {
     document.getElementById('deleteRegistryServerName2').innerHTML = name;
     document.getElementById('deleteRegistryServerURL').innerHTML = url;
     document.getElementById('deleteRegistryResponse').innerHTML = '';
- 
+
     $('#deleteRegistryModal').modal('show');
 }
 
@@ -1025,7 +1072,7 @@ function notifyForDeleteRegistry() {
                         deleteRegistryUrl = null;
                         $('#deleteRegistryModal').modal('hide');
                         NETDATA.registry.init();
-                    });    
+                    });
                 });
         } else {
             NETDATA.registry.delete(deleteRegistryUrl, function (result) {
@@ -1036,7 +1083,7 @@ function notifyForDeleteRegistry() {
                 } else {
                     responseEl.innerHTML = "<b>Sorry, this command was rejected by the registry server!</b>";
                 }
-            });              
+            });
         }
     }
 }
@@ -1117,7 +1164,7 @@ function scrollToId(hash) {
         var offset = $('#' + hash).offset();
         if (typeof offset !== 'undefined') {
             //console.log('scrolling to ' + hash + ' at ' + offset.top.toString());
-            $('html, body').animate({scrollTop: offset.top - 30}, 0);
+            $('html, body').animate({ scrollTop: offset.top - 30 }, 0);
         }
     }
 
@@ -1169,7 +1216,7 @@ var netdataDashboard = {
         }
 
         if (typeof this.sparklines_registry[key] === 'undefined') {
-            this.sparklines_registry[key] = {count: 1};
+            this.sparklines_registry[key] = { count: 1 };
         } else {
             this.sparklines_registry[key].count++;
         }
@@ -1360,6 +1407,14 @@ function enrichChartData(chart) {
                 chart.menu_pattern = tmp + '_' + parts[1];
             } else if (parts.length > 1) {
                 chart.menu_pattern = tmp;
+            }
+            break;
+
+        case 'mount':
+            if (parts.length > 2) {
+                chart.menu = tmp + '_' + parts[1];
+            } else {
+                chart.menu = tmp;
             }
             break;
 
@@ -1755,8 +1810,6 @@ function renderPage(menus, data) {
                 if (urlOptions.mode === 'print') {
                     chtml += '</div>';
                 }
-
-                // console.log('         \------- ' + chart.id + ' (' + chart.priority + '): ' + chart.context  + ' height: ' + menus[menu].submenus[submenu].height);
             }
 
             head += '</div>';
@@ -1768,9 +1821,26 @@ function renderPage(menus, data) {
         html += mhead + shtml + '</div></div><hr role="separator"/>';
     }
 
-    sidebar += '<li class="" style="padding-top:15px;"><a href="https://github.com/netdata/netdata/blob/master/docs/Add-more-charts-to-netdata.md#add-more-charts-to-netdata" target="_blank"><i class="fas fa-plus"></i> add more charts</a></li>';
-    sidebar += '<li class=""><a href="https://github.com/netdata/netdata/tree/master/health#Health-monitoring" target="_blank"><i class="fas fa-plus"></i> add more alarms</a></li>';
-    sidebar += '<li class="" style="margin:20px;color:#666;"><small>netdata on <b>' + data.hostname.toString() + '</b>, collects every ' + ((data.update_every === 1) ? 'second' : data.update_every.toString() + ' seconds') + ' <b>' + data.dimensions_count.toLocaleString() + '</b> metrics, presented as <b>' + data.charts_count.toLocaleString() + '</b> charts and monitored by <b>' + data.alarms_count.toLocaleString() + '</b> alarms, using ' + Math.round(data.rrd_memory_bytes / 1024 / 1024).toLocaleString() + ' MB of memory for ' + NETDATA.seconds4human(data.update_every * data.history, {space: '&nbsp;'}) + ' of real-time history.<br/>&nbsp;<br/><b>netdata</b><br/>' + data.version.toString() + '</small></li>';
+    const isMemoryModeDbEngine = data.memory_mode === "dbengine";
+
+    sidebar += '<li class="" style="padding-top:15px;"><a href="https://learn.netdata.cloud/docs/agent/collectors/quickstart/" target="_blank"><i class="fas fa-plus"></i> Add more charts</a></li>';
+    sidebar += '<li class=""><a href="https://learn.netdata.cloud/docs/agent/health/quickstart/" target="_blank"><i class="fas fa-plus"></i> Add more alarms</a></li>';
+    sidebar += '<li class="" style="margin:20px;color:#666;"><small>Every ' +
+      ((data.update_every === 1) ? 'second' : data.update_every.toString() + ' seconds') + ', ' +
+      'Netdata collects <strong>' + data.dimensions_count.toLocaleString() + '</strong> metrics on ' +
+      data.hostname.toString() + ', presents them in <strong>' +
+      data.charts_count.toLocaleString() + '</strong> charts' +
+      (isMemoryModeDbEngine ? '' : ',') + // oxford comma
+      ' and monitors them with <strong>' +
+      data.alarms_count.toLocaleString() + '</strong> alarms.';
+
+    if (!isMemoryModeDbEngine) {
+        sidebar += '<br />&nbsp;<br />Get more history by ' +
+          '<a href="https://learn.netdata.cloud/guides/longer-metrics-storage#using-the-round-robin-database" target=_blank>configuring Netdata\'s <strong>history</strong></a> or using the <a href="https://learn.netdata.cloud/docs/agent/database/engine/" target=_blank>DB engine.</a>';
+    }
+
+    sidebar += '<br/>&nbsp;<br/><strong>netdata</strong><br/>' + data.version.toString() + '</small></li>';
+
     sidebar += '</ul>';
     div.innerHTML = html;
     document.getElementById('sidebar').innerHTML = sidebar;
@@ -1881,10 +1951,10 @@ function renderChartsAndMenu(data) {
 
 function loadJs(url, callback) {
     $.ajax({
-        url: url,
+        url: url.startsWith("http") ? url : transformWithOldSuffix(url),
         cache: true,
         dataType: "script",
-        xhrFields: {withCredentials: true} // required for the cookie
+        xhrFields: { withCredentials: true } // required for the cookie
     })
         .fail(function () {
             alert('Cannot load required JS library: ' + url);
@@ -1928,7 +1998,7 @@ function loadBootstrapSlider(callback) {
     if (bootstrapSliderLoaded === false) {
         bootstrapSliderLoaded = true;
         loadJs('lib/bootstrap-slider-10.0.0.min.js', function () {
-            NETDATA._loadCSS('css/bootstrap-slider-10.0.0.min.css');
+            NETDATA._loadCSS(transformWithOldSuffix("css/bootstrap-slider-10.0.0.min.css"));
             callback();
         });
     } else {
@@ -1973,7 +2043,7 @@ function clipboardCopyBadgeEmbed(url) {
 function alarmsUpdateModal() {
     var active = '<h3>Raised Alarms</h3><table class="table">';
     var all = '<h3>All Running Alarms</h3><div class="panel-group" id="alarms_all_accordion" role="tablist" aria-multiselectable="true">';
-    var footer = '<hr/><a href="https://github.com/netdata/netdata/tree/master/web/api/badges#netdata-badges" target="_blank">netdata badges</a> refresh automatically. Their color indicates the state of the alarm: <span style="color: #e05d44"><b>&nbsp;red&nbsp;</b></span> is critical, <span style="color:#fe7d37"><b>&nbsp;orange&nbsp;</b></span> is warning, <span style="color: #4c1"><b>&nbsp;bright green&nbsp;</b></span> is ok, <span style="color: #9f9f9f"><b>&nbsp;light grey&nbsp;</b></span> is undefined (i.e. no data or no status), <span style="color: #000"><b>&nbsp;black&nbsp;</b></span> is not initialized. You can copy and paste their URLs to embed them in any web page.<br/>netdata can send notifications for these alarms. Check <a href="https://github.com/netdata/netdata/blob/master/health/notifications/health_alarm_notify.conf">this configuration file</a> for more information.';
+    var footer = '<hr/><a href="https://github.com/netdata/netdata/tree/master/web/api/badges#netdata-badges" target="_blank">netdata badges</a> refresh automatically. Their color indicates the state of the alarm: <span style="color: #e05d44"><b>&nbsp;red&nbsp;</b></span> is critical, <span style="color:#fe7d37"><b>&nbsp;orange&nbsp;</b></span> is warning, <span style="color: #4c1"><b>&nbsp;bright green&nbsp;</b></span> is ok, <span style="color: #9f9f9f"><b>&nbsp;light grey&nbsp;</b></span> is undefined (i.e. no data or no status), <span style="color: #000"><b>&nbsp;black&nbsp;</b></span> is not initialized. You can copy and paste their URLs to embed them in any web page.<br/>netdata can send notifications for these alarms. Check <a href="https://github.com/netdata/netdata/blob/master/health/notifications/health_alarm_notify.conf" target="_blank">this configuration file</a> for more information.';
 
     loadClipboard(function () {
     });
@@ -1986,8 +2056,8 @@ function alarmsUpdateModal() {
         if (data === null) {
             document.getElementById('alarms_active').innerHTML =
                 document.getElementById('alarms_all').innerHTML =
-                    document.getElementById('alarms_log').innerHTML =
-                        'failed to load alarm data!';
+                document.getElementById('alarms_log').innerHTML =
+                'failed to load alarm data!';
             return;
         }
 
@@ -2037,7 +2107,7 @@ function alarmsUpdateModal() {
 
             return '<code>' + alarm.lookup_method + '</code> '
                 + dimensions + ', of chart <code>' + alarm.chart + '</code>'
-                + ', starting <code>' + NETDATA.seconds4human(alarm.lookup_after + alarm.lookup_before, {space: '&nbsp;'}) + '</code> and up to <code>' + NETDATA.seconds4human(alarm.lookup_before, {space: '&nbsp;'}) + '</code>'
+                + ', starting <code>' + NETDATA.seconds4human(alarm.lookup_after + alarm.lookup_before, { space: '&nbsp;' }) + '</code> and up to <code>' + NETDATA.seconds4human(alarm.lookup_before, { space: '&nbsp;' }) + '</code>'
                 + ((alarm.lookup_options) ? (', with options <code>' + alarm.lookup_options.replace(/ /g, ',&nbsp;') + '</code>') : '')
                 + '.';
         }
@@ -2059,7 +2129,7 @@ function alarmsUpdateModal() {
             var badge_url = NETDATA.alarms.server + '/api/v1/badge.svg?chart=' + alarm.chart + '&alarm=' + alarm.name + '&refresh=auto';
 
             var action_buttons = '<br/>&nbsp;<br/>role: <b>' + alarm.recipient + '</b><br/>&nbsp;<br/>'
-                + '<div class="action-button ripple" title="click to scroll the dashboard to the chart of this alarm" data-toggle="tooltip" data-placement="bottom" onClick="scrollToChartAfterHidingModal(\'' + alarm.chart + '\'); $(\'#alarmsModal\').modal(\'hide\'); return false;"><i class="fab fa-periscope"></i></div>'
+                + '<div class="action-button ripple" title="click to scroll the dashboard to the chart of this alarm" data-toggle="tooltip" data-placement="bottom" onClick="scrollToChartAfterHidingModal(\'' + alarm.chart + '\', ' + alarm.last_status_change * 1000 + ', \'' + alarm.status + '\'); $(\'#alarmsModal\').modal(\'hide\'); return false;"><i class="fab fa-periscope"></i></div>'
                 + '<div class="action-button ripple" title="click to copy to the clipboard the URL of this badge" data-toggle="tooltip" data-placement="bottom" onClick="clipboardCopy(\'' + badge_url + '\'); return false;"><i class="far fa-copy"></i></div>'
                 + '<div class="action-button ripple" title="click to copy to the clipboard an auto-refreshing <code>embed</code> html element for this badge" data-toggle="tooltip" data-placement="bottom" onClick="clipboardCopyBadgeEmbed(\'' + badge_url + '\'); return false;"><i class="fas fa-copy"></i></div>';
 
@@ -2078,6 +2148,14 @@ function alarmsUpdateModal() {
                     + ((typeof alarm.calc !== 'undefined') ? ('<tr><td width="10%" style="text-align:right">calculation</td><td><span style="font-family: monospace;">' + alarm.calc + '</span></td></tr>') : '')
                     + ((chart.green !== null) ? ('<tr><td width="10%" style="text-align:right">green&nbsp;threshold</td><td><code>' + chart.green + ' ' + units + '</code></td></tr>') : '')
                     + ((chart.red !== null) ? ('<tr><td width="10%" style="text-align:right">red&nbsp;threshold</td><td><code>' + chart.red + ' ' + units + '</code></td></tr>') : '');
+            }
+
+            if (alarm.warn_repeat_every > 0) {
+                html += '<tr><td width="10%" style="text-align:right">repeat&nbsp;warning</td><td>' + NETDATA.seconds4human(alarm.warn_repeat_every) + '</td></tr>';
+            }
+
+            if (alarm.crit_repeat_every > 0) {
+                html += '<tr><td width="10%" style="text-align:right">repeat&nbsp;critical</td><td>' + NETDATA.seconds4human(alarm.crit_repeat_every) + '</td></tr>';
             }
 
             var delay = '';
@@ -2113,9 +2191,9 @@ function alarmsUpdateModal() {
             }
 
             html += '<tr><td width="10%" style="text-align:right">check&nbsp;every</td><td>' + NETDATA.seconds4human(alarm.update_every, {
-                    space: '&nbsp;',
-                    negative_suffix: ''
-                }) + '</td></tr>'
+                space: '&nbsp;',
+                negative_suffix: ''
+            }) + '</td></tr>'
                 + ((has_alarm === true) ? ('<tr><td width="10%" style="text-align:right">execute</td><td><span style="font-family: monospace;">' + alarm.exec + '</span>' + delay + '</td></tr>') : '')
                 + '<tr><td width="10%" style="text-align:right">source</td><td><span style="font-family: monospace;">' + alarm.source + '</span></td></tr>'
                 + '</table></td></tr>';
@@ -2160,7 +2238,7 @@ function alarmsUpdateModal() {
             // not found - this should never happen!
             if (typeof chart === 'undefined') {
                 console.log('WARNING: alarm ' + x + ' is linked to chart ' + alarm.chart + ', which is not found in the list of chart got from the server.');
-                chart = {priority: 9999999};
+                chart = { priority: 9999999 };
             }
             else if (typeof chart.menu !== 'undefined' && typeof chart.submenu !== 'undefined')
             // the family based on the chart
@@ -2292,21 +2370,33 @@ function alarmsUpdateModal() {
                 exportOptions: {
                     fileName: 'netdata_alarm_log'
                 },
+                onClickRow: function (row, $element,field) {
+                    void (field);
+                    void ($element);
+                    let main_url;
+                    let common_url = "&host=" + encodeURIComponent(row['hostname']) + "&chart=" + encodeURIComponent(row['chart']) + "&family=" + encodeURIComponent(row['family']) + "&alarm=" + encodeURIComponent(row['name']) + "&alarm_unique_id=" + row['unique_id'] + "&alarm_id=" + row['alarm_id'] + "&alarm_event_id=" +  row['alarm_event_id'] + "&alarm_when=" + row['when'];
+                    if (NETDATA.registry.isUsingGlobalRegistry() && NETDATA.registry.machine_guid != null) {
+                        main_url = "https://netdata.cloud/alarms/redirect?agentID=" + NETDATA.registry.machine_guid + common_url;
+                    } else {
+                        main_url = NETDATA.registry.server + "/goto-host-from-alarm.html?" + common_url ;
+                    }
+                    window.open(main_url,"_blank");
+                },
                 rowStyle: function (row, index) {
                     void (index);
 
                     switch (row.status) {
                         case 'CRITICAL':
-                            return {classes: 'danger'};
+                            return { classes: 'danger' };
                             break;
                         case 'WARNING':
-                            return {classes: 'warning'};
+                            return { classes: 'warning' };
                             break;
                         case 'UNDEFINED':
-                            return {classes: 'info'};
+                            return { classes: 'info' };
                             break;
                         case 'CLEAR':
-                            return {classes: 'success'};
+                            return { classes: 'success' };
                             break;
                     }
                     return {};
@@ -2494,7 +2584,7 @@ function alarmsUpdateModal() {
                         formatter: function (value, row, index) {
                             void (row);
                             void (index);
-                            return NETDATA.seconds4human(value, {negative_suffix: '', space: ' ', now: 'no time'});
+                            return NETDATA.seconds4human(value, { negative_suffix: '', space: ' ', now: 'no time' });
                         },
                         align: 'center',
                         valign: 'middle',
@@ -2508,7 +2598,7 @@ function alarmsUpdateModal() {
                         formatter: function (value, row, index) {
                             void (row);
                             void (index);
-                            return NETDATA.seconds4human(value, {negative_suffix: '', space: ' ', now: 'no time'});
+                            return NETDATA.seconds4human(value, { negative_suffix: '', space: ' ', now: 'no time' });
                         },
                         align: 'center',
                         valign: 'middle',
@@ -2640,7 +2730,7 @@ function alarmsUpdateModal() {
                             void (row);
                             void (index);
 
-                            return NETDATA.seconds4human(value, {negative_suffix: '', space: ' ', now: 'no time'});
+                            return NETDATA.seconds4human(value, { negative_suffix: '', space: ' ', now: 'no time' });
                         },
                         align: 'center',
                         valign: 'middle',
@@ -2719,7 +2809,7 @@ function initializeDynamicDashboardWithData(data) {
         }
 
         // update the dashboard hostname
-        document.getElementById('hostname').innerHTML = options.hostname + ((netdataSnapshotData !== null) ? ' (snap)' : '').toString() + '&nbsp;&nbsp;<strong class="caret">';
+        document.getElementById('hostname').innerHTML = '<span id="hostnametext">' + options.hostname + ((netdataSnapshotData !== null) ? ' (snap)' : '').toString() + '</span>&nbsp;&nbsp;<strong class="caret">';
         document.getElementById('hostname').href = NETDATA.serverDefault;
         document.getElementById('netdataVersion').innerHTML = options.version;
 
@@ -2758,7 +2848,7 @@ function initializeDynamicDashboardWithData(data) {
     }
 }
 
-// an object to keep initilization configuration
+// an object to keep initialization configuration
 // needed due to the async nature of the XSS modal
 var initializeConfig = {
     url: null,
@@ -2844,32 +2934,32 @@ function versionsMatch(v1, v2) {
     if (v1 == v2) {
         return true;
     } else {
-        let s1=v1.split('.');
-        let s2=v2.split('.');
+        let s1 = v1.split('.');
+        let s2 = v2.split('.');
         // Check major version
-        let n1 = parseInt(s1[0].substring(1,2),10);
-        let n2 = parseInt(s2[0].substring(1,2), 10);
-        if ( n1 < n2 ) return false;
-        else if ( n1 > n2 ) return true;
+        let n1 = parseInt(s1[0].substring(1, 2), 10);
+        let n2 = parseInt(s2[0].substring(1, 2), 10);
+        if (n1 < n2) return false;
+        else if (n1 > n2) return true;
 
         // Check minor version
-        n1 = parseInt(s1[1],10);
-        n2 = parseInt(s2[1],10);
-        if ( n1 < n2 ) return false;
-        else if ( n1 > n2 ) return true;
+        n1 = parseInt(s1[1], 10);
+        n2 = parseInt(s2[1], 10);
+        if (n1 < n2) return false;
+        else if (n1 > n2) return true;
 
         // Split patch: format could be e.g. 0-22-nightly
-        s1=s1[2].split('-');
-        s2=s2[2].split('-');
+        s1 = s1[2].split('-');
+        s2 = s2[2].split('-');
 
-        n1 = parseInt(s1[0],10);
-        n2 = parseInt(s2[0],10);
-        if ( n1 < n2 ) return false;
-        else if ( n1 > n2 ) return true;
+        n1 = parseInt(s1[0], 10);
+        n2 = parseInt(s2[0], 10);
+        if (n1 < n2) return false;
+        else if (n1 > n2) return true;
 
-        n1 = (s1.length > 1) ? parseInt(s1[1],10) : 0;
-        n2 = (s2.length > 1) ? parseInt(s2[1],10) : 0;
-        if ( n1 < n2 ) return false;
+        n1 = (s1.length > 1) ? parseInt(s1[1], 10) : 0;
+        n2 = (s2.length > 1) ? parseInt(s2[1], 10) : 0;
+        if (n1 < n2) return false;
         else return true;
     }
 }
@@ -2970,7 +3060,7 @@ function notifyForUpdate(force) {
             versionLog('<p><big>You already have the latest netdata!</big></p><p>No update yet?<br/>We probably need some motivation to keep going on!</p><p>If you haven\'t already, <a href="https://github.com/netdata/netdata" target="_blank">give netdata a <b><i class="fas fa-star"></i></b> at its github page</a>.</p>');
         } else {
             save = true;
-            var compare = 'https://docs.netdata.cloud/changelog/';
+            var compare = 'https://learn.netdata.cloud/docs/agent/changelog/';
             versionLog('<p><big><strong>New version of netdata available!</strong></big></p><p>Latest version: <b><code>' + sha2 + '</code></b></p><p><a href="' + compare + '" target="_blank">Click here for the changes log</a> and<br/><a href="https://github.com/netdata/netdata/tree/master/packaging/installer/UPDATE.md" target="_blank">click here for directions on updating</a> your netdata installation.</p><p>We suggest to review the changes log for new features you may be interested, or important bug fixes you may need.<br/>Keeping your netdata updated is generally a good idea.</p>');
 
             document.getElementById('update_badge').innerHTML = '!';
@@ -3117,7 +3207,7 @@ var snapshotOptions = {
             bytes_per_point_disk: 1.9,
 
             compress: function (s) {
-                return btoa(pako.deflate(s, {to: 'string'}));
+                return btoa(pako.deflate(s, { to: 'string' }));
             },
 
             compressed_length: function (s) {
@@ -3125,7 +3215,7 @@ var snapshotOptions = {
             },
 
             uncompress: function (s) {
-                return pako.inflate(atob(s), {to: 'string'});
+                return pako.inflate(atob(s), { to: 'string' });
             }
         },
 
@@ -3134,7 +3224,7 @@ var snapshotOptions = {
             bytes_per_point_disk: 3.2,
 
             compress: function (s) {
-                return pako.deflate(s, {to: 'string'});
+                return pako.deflate(s, { to: 'string' });
             },
 
             compressed_length: function (s) {
@@ -3142,7 +3232,7 @@ var snapshotOptions = {
             },
 
             uncompress: function (s) {
-                return pako.inflate(s, {to: 'string'});
+                return pako.inflate(s, { to: 'string' });
             }
         },
 
@@ -3922,9 +4012,21 @@ function scrollDashboardTo() {
 
 var modalHiddenCallback = null;
 
-function scrollToChartAfterHidingModal(chart) {
+function scrollToChartAfterHidingModal(chart, alarmDate, alarmStatus) {
     modalHiddenCallback = function () {
-        NETDATA.alarms.scrollToChart(chart);
+        NETDATA.alarms.scrollToChart(chart, alarmDate);
+
+        if (['WARNING', 'CRITICAL'].includes(alarmStatus)) {
+            const currentChartState = NETDATA.options.targets.find(
+              (chartState) => chartState.id === chart,
+            )
+            const twoMinutes = 2 * 60 * 1000
+            NETDATA.globalPanAndZoom.setMaster(
+              currentChartState,
+              alarmDate - twoMinutes,
+              alarmDate + twoMinutes,
+            )
+        }
     };
 }
 
@@ -3935,7 +4037,7 @@ function enableTooltipsAndPopovers() {
         animated: 'fade',
         trigger: 'hover',
         html: true,
-        delay: {show: 500, hide: 0},
+        delay: { show: 500, hide: 0 },
         container: 'body'
     });
     $('[data-toggle="popover"]').popover();
@@ -4013,7 +4115,7 @@ function runOnceOnDashboardWithjQuery() {
 
                 // scroll to the position we had open before the modal
                 $('html, body')
-                    .animate({scrollTop: scrollPos}, 0);
+                    .animate({ scrollTop: scrollPos }, 0);
 
                 // unpause netdata, if we paused it
                 if (netdata_paused_on_modal === true) {
@@ -4041,6 +4143,14 @@ function runOnceOnDashboardWithjQuery() {
 
     // ------------------------------------------------------------------------
     // sidebar / affix
+
+    if (shouldShowSignInBanner()) {
+        const el = document.getElementById("sign-in-banner");
+        if (el) {
+            el.style.display = "initial";
+            el.classList.add(`theme-${netdataTheme}`);
+        }
+    }
 
     $('#sidebar')
         .affix({
@@ -4171,8 +4281,8 @@ function runOnceOnDashboardWithjQuery() {
         .on('hidden.bs.modal', function () {
             document.getElementById('alarms_active').innerHTML =
                 document.getElementById('alarms_all').innerHTML =
-                    document.getElementById('alarms_log').innerHTML =
-                        'loading...';
+                document.getElementById('alarms_log').innerHTML =
+                'loading...';
         });
 
     // ------------------------------------------------------------------------
@@ -4222,7 +4332,7 @@ function runOnceOnDashboardWithjQuery() {
                 if ($this.hasClass('less')) {
                     $this.removeClass('less');
                     $this.html(config.moreText);
-                    $this.parent().prev().animate({'height': '0' + '%'}, 0, function () {
+                    $this.parent().prev().animate({ 'height': '0' + '%' }, 0, function () {
                         $this.parent().prev().prev().show();
                     }).hide(0, function () {
                         config.onLess();
@@ -4230,7 +4340,7 @@ function runOnceOnDashboardWithjQuery() {
                 } else {
                     $this.addClass('less');
                     $this.html(config.lessText);
-                    $this.parent().prev().animate({'height': '100' + '%'}, 0, function () {
+                    $this.parent().prev().animate({ 'height': '100' + '%' }, 0, function () {
                         $this.parent().prev().prev().hide();
                     }).show(0, function () {
                         config.onMore();
@@ -4329,7 +4439,7 @@ function runOnceOnDashboardWithjQuery() {
 function finalizePage() {
     // resize all charts - without starting the background thread
     // this has to be done while NETDATA is paused
-    // if we ommit this, the affix menu will be wrong, since all
+    // if we omit this, the affix menu will be wrong, since all
     // the Dom elements are initially zero-sized
     NETDATA.parseDom();
 
@@ -4358,12 +4468,6 @@ function finalizePage() {
     if (isdemo()) {
         // do not to give errors on netdata demo servers for 60 seconds
         NETDATA.options.current.retries_on_data_failures = 60;
-
-        if (urlOptions.nowelcome !== true) {
-            setTimeout(function () {
-                $('#welcomeModal').modal();
-            }, 1000);
-        }
 
         // google analytics when this is used for the home page of the demo sites
         // this does not run on user's installations
@@ -4402,6 +4506,12 @@ function finalizePage() {
     if (netdataSnapshotData !== null) {
         NETDATA.globalPanAndZoom.setMaster(NETDATA.options.targets[0], netdataSnapshotData.after_ms, netdataSnapshotData.before_ms);
     }
+
+    //if (urlOptions.nowelcome !== true) {
+    //    setTimeout(function () {
+    //        $('#welcomeModal').modal();
+    //    }, 2000);
+    //}
 
     // var netdataEnded = performance.now();
     // console.log('start up time: ' + (netdataEnded - netdataStarted).toString() + ' ms');
@@ -4553,7 +4663,7 @@ function getCloudAccountAgents() {
     if (!isSignedIn()) {
         return [];
     }
-    
+
     return fetch(
         `${NETDATA.registry.cloudBaseURL}/api/v1/accounts/${cloudAccountID}/agents`,
         {
@@ -4563,7 +4673,7 @@ function getCloudAccountAgents() {
                 "Authorization": `Bearer ${cloudToken}`
             }
         }
-    ).then((response)  => {
+    ).then((response) => {
         if (!response.ok) {
             throw Error("Cannot fetch known accounts");
         }
@@ -4583,6 +4693,36 @@ function getCloudAccountAgents() {
                 "alternate_urls": a.urls
             }
         })
+    }).catch(function (error) {
+        console.log(error);
+        return null;
+    });
+}
+
+/** Updates the lastAccessTime and accessCount properties of the agent for the account. */
+function touchAgent() {
+    if (!isSignedIn()) {
+        return [];
+    }
+
+    const touchUrl = `${NETDATA.registry.cloudBaseURL}/api/v1/agents/${NETDATA.registry.machine_guid}/touch?account_id=${cloudAccountID}`;
+    return fetch(
+        touchUrl,
+        {
+            method: "post",
+            body: "",
+            mode: "cors",
+            headers: {
+                "Authorization": `Bearer ${cloudToken}`
+            }
+        }
+    ).then((response) => {
+        if (!response.ok) {
+            throw Error("Cannot touch agent" + JSON.stringify(response));
+        }
+        return response.json();
+    }).then((payload) => {
+
     }).catch(function (error) {
         console.log(error);
         return null;
@@ -4612,7 +4752,7 @@ function postCloudAccountAgents(agentsToSync) {
         "agents": agents,
         "merge": false,
     };
-    
+
     return fetch(
         `${NETDATA.registry.cloudBaseURL}/api/v1/accounts/${cloudAccountID}/agents`,
         {
@@ -4640,7 +4780,7 @@ function postCloudAccountAgents(agentsToSync) {
                 "url": a.urls[0],
                 "alternate_urls": a.urls
             }
-        })        
+        })
     });
 }
 
@@ -4683,6 +4823,22 @@ function signInDidClick(e) {
     signIn();
 }
 
+function shouldShowSignInBanner() {
+    return false;
+}
+
+function closeSignInBanner() {
+    localStorage.setItem("signInBannerClosed", "true");
+    const el = document.getElementById("sign-in-banner");
+    if (el) {
+        el.style.display = "none";
+    }
+}
+
+function closeSignInBannerDidClick(e) {
+    closeSignInBanner();
+}
+
 function signOutDidClick(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -4697,7 +4853,7 @@ function updateMyNetdataAfterFilterChange() {
 
     if (options.hosts.length > 1) {
         const streamedEl = document.getElementById("my-netdata-menu-streamed")
-        streamedEl.innerHTML = renderStreamedHosts(options);    
+        streamedEl.innerHTML = renderStreamedHosts(options);
     }
 }
 
@@ -4712,7 +4868,7 @@ function myNetdataFilterDidChange(e) {
     const inputEl = e.target;
     setTimeout(() => {
         myNetdataMenuFilterValue = inputEl.value;
-        updateMyNetdataAfterFilterChange();        
+        updateMyNetdataAfterFilterChange();
     }, 1);
 }
 
@@ -4723,9 +4879,9 @@ function myNetdataFilterClearDidClick(e) {
     const inputEl = document.getElementById("my-netdata-menu-filter-input");
     inputEl.value = "";
     myNetdataMenuFilterValue = "";
-    
-    updateMyNetdataAfterFilterChange();        
-    
+
+    updateMyNetdataAfterFilterChange();
+
     inputEl.focus();
 }
 
@@ -4744,44 +4900,12 @@ function clearCloudLocalStorageItems() {
 }
 
 function signIn() {
-    const url = `${NETDATA.registry.cloudBaseURL}/account/sign-in-agent?origin=${encodeURIComponent(window.location.origin + "/")}`;
+    const url = `${NETDATA.registry.cloudBaseURL}/account/sign-in-agent?id=${NETDATA.registry.machine_guid}&name=${encodeURIComponent(NETDATA.registry.hostname)}&origin=${encodeURIComponent(window.location.origin + "/")}`;
     window.open(url);
 }
 
 function signOut() {
     cloudSSOSignOut();
-}
-
-function renderAccountUI() {
-    if (!NETDATA.registry.isCloudEnabled) {
-        return
-    }
-
-    const container = document.getElementById("account-menu-container");
-    if (isSignedIn()) {
-        container.removeAttribute("title");
-        container.removeAttribute("data-original-title");
-        container.removeAttribute("data-placement");
-        container.innerHTML = (
-            `<a href="#" class="dropdown-toggle" data-toggle="dropdown"><span id="amc-account-name"></span> <strong class="caret"></strong></a>
-            <ul id="cloud-menu" class="dropdown-menu scrollable-menu inpagemenu" role="menu">
-                    <li>
-                        <a href="#" class="btn" onclick="signOutDidClick(event); return false">
-                        <i class="fas fa-sign-out-alt"></i>&nbsp;&nbsp;<span class="hidden-sm hidden-md">Sign Out</span>
-                    </a>
-                </li>
-            </ul>`
-        )
-        document.getElementById("amc-account-name").textContent = cloudAccountName; // Anti-XSS
-    } else {
-        container.setAttribute("data-original-title", "sign in");
-        container.setAttribute("data-placement", "bottom");
-        container.innerHTML = (
-            `<a href="#" class="btn" onclick="signInDidClick(event); return false">
-                <i class="fas fa-sign-in-alt"></i>&nbsp;<span class="hidden-sm hidden-md">Sign In</span>
-            </a>`
-        )
-    }
 }
 
 function handleMessage(e) {
@@ -4800,6 +4924,7 @@ function handleMessage(e) {
 }
 
 function handleSignInMessage(e) {
+    closeSignInBanner();
     localStorage.setItem("cloud.baseURL", NETDATA.registry.cloudBaseURL);
 
     cloudAccountID = e.data.accountID;
@@ -4807,11 +4932,14 @@ function handleSignInMessage(e) {
     cloudToken = e.data.token;
 
     netdataRegistryCallback(registryAgents);
+    if (e.data.redirectURI && !window.location.href.includes(e.data.redirectURI)) {
+        // lgtm false-positive - redirectURI does not come from user input, but from iframe callback
+        window.location.replace(e.data.redirectURI); // lgtm[js/client-side-unvalidated-url-redirection]
+    }
 }
 
 function handleSignOutMessage(e) {
-    clearCloudVariables();    
-    renderAccountUI();
+    clearCloudVariables();
     renderMyNetdataMenu(registryAgents);
 }
 
@@ -4884,17 +5012,17 @@ function explicitlySyncAgents() {
     $("#syncRegistryModal").modal("hide");
 
     const json = localStorage.getItem("cloud.sync");
-    const sync = json ? JSON.parse(json): {};
+    const sync = json ? JSON.parse(json) : {};
     delete sync[cloudAccountID];
     localStorage.setItem("cloud.sync", JSON.stringify(sync));
-    
+
     NETDATA.registry.init();
 }
 
 function syncAgents(callback) {
     const json = localStorage.getItem("cloud.sync");
-    const sync = json ? JSON.parse(json): {};
-    
+    const sync = json ? JSON.parse(json) : {};
+
     const currentAgent = {
         guid: NETDATA.registry.machine_guid,
         name: NETDATA.registry.hostname,
@@ -4902,30 +5030,30 @@ function syncAgents(callback) {
         alternate_urls: [NETDATA.serverDefault],
     }
 
-    const localAgents = sync[cloudAccountID] 
-        ? [currentAgent] 
+    const localAgents = sync[cloudAccountID]
+        ? [currentAgent]
         : registryAgents.concat([currentAgent]);
-    
+
     console.log("Checking if sync is needed.", localAgents);
 
     const agentsToSync = mergeAgents(cloudAgents, localAgents);
 
-    if ((!sync[cloudAccountID]) || agentsToSync)  {
+    if ((!sync[cloudAccountID]) || agentsToSync) {
         sync[cloudAccountID] = new Date().getTime();
         localStorage.setItem("cloud.sync", JSON.stringify(sync));
     }
 
     if (agentsToSync) {
         console.log("Synchronizing with netdata.cloud.");
-        
+
         postCloudAccountAgents(agentsToSync).then((agents) => {
             // TODO: clear syncTime on error!
             cloudAgents = agents;
             callback(cloudAgents);
         });
 
-        return        
-    } 
+        return
+    }
 
     callback(cloudAgents);
 }
@@ -4964,7 +5092,7 @@ function initCloud() {
         cloudSSOInit();
     }
 
-    renderAccountUI();
+    touchAgent();
 }
 
 // This callback is called after NETDATA.registry is initialized.
@@ -4973,10 +5101,10 @@ function netdataRegistryCallback(machinesArray) {
 
     initCloud();
 
-    registryAgents = machinesArray;  
+    registryAgents = machinesArray;
 
     if (isSignedIn()) {
-        // We call getCloudAccountAgents() here because it requires that 
+        // We call getCloudAccountAgents() here because it requires that
         // NETDATA.registry is initialized.
         clearMyNetdataMenu();
         getCloudAccountAgents().then((agents) => {
@@ -4984,17 +5112,17 @@ function netdataRegistryCallback(machinesArray) {
                 errorMyNetdataMenu();
                 return;
             }
-            cloudAgents = agents; 
+            cloudAgents = agents;
             syncAgents((agents) => {
                 const agentsMap = {}
                 for (const agent of agents) {
                     agentsMap[agent.guid] = agent;
                 }
-    
+
                 NETDATA.registry.machines = agentsMap;
                 NETDATA.registry.machines_array = agents;
-    
-                renderMyNetdataMenu(agents);    
+
+                renderMyNetdataMenu(agents);
             });
         });
     } else {
@@ -5002,8 +5130,8 @@ function netdataRegistryCallback(machinesArray) {
     }
 };
 
-// If we know the cloudBaseURL and agentID from local storage render (eagerly) 
-// the account ui before receiving the definitive response from the web server. 
+// If we know the cloudBaseURL and agentID from local storage render (eagerly)
+// the account ui before receiving the definitive response from the web server.
 // This improves the perceived performance.
 function tryFastInitCloud() {
     const baseURL = localStorage.getItem("cloud.baseURL");
@@ -5013,15 +5141,15 @@ function tryFastInitCloud() {
         NETDATA.registry.cloudBaseURL = baseURL;
         NETDATA.registry.machine_guid = agentID;
         NETDATA.registry.isCloudEnabled = true;
-    
+
         initCloud();
     }
 }
 
 function initializeApp() {
-    window.addEventListener("message", handleMessage, false);    
+    window.addEventListener("message", handleMessage, false);
 
-//    tryFastInitCloud();
+    //    tryFastInitCloud();
 }
 
 if (document.readyState === "complete") {
@@ -5031,5 +5159,5 @@ if (document.readyState === "complete") {
         if (document.readyState === "complete") {
             initializeApp();
         }
-    })
+    });
 }

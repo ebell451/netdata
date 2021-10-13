@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Description: adaptec_raid netdata python.d module
 # Author: Federico Ceratto <federico.ceratto@gmail.com>
-# Author: Ilya Mashchenko (l2isbad)
+# Author: Ilya Mashchenko (ilyam8)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 
@@ -11,10 +11,10 @@ try:
     import stem
     import stem.connection
     import stem.control
+
     STEM_AVAILABLE = True
 except ImportError:
     STEM_AVAILABLE = False
-
 
 DEF_PORT = 'default'
 
@@ -35,6 +35,7 @@ CHARTS = {
 
 class Service(SimpleService):
     """Provide netdata service for Tor"""
+
     def __init__(self, configuration=None, name=None):
         super(Service, self).__init__(configuration=configuration, name=name)
         self.order = ORDER

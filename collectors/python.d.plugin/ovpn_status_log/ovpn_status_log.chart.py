@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
 # Description: openvpn status log netdata python.d module
-# Author: l2isbad
+# Author: ilyam8
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import re
 
 from bases.FrameworkServices.SimpleService import SimpleService
-
 
 update_every = 10
 
@@ -72,7 +71,7 @@ class Service(SimpleService):
                 break
         if found:
             return True
-        self.error('Failed to parse ovpenvpn log file')
+        self.error('Failed to parse openvpn log file')
         return False
 
     def _get_raw_data(self):

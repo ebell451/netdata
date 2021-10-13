@@ -1,415 +1,242 @@
-# Installation
+<!--
+title: "Installation guide"
+custom_edit_url: https://github.com/netdata/netdata/edit/master/packaging/installer/README.md
+-->
 
-Netdata is a **monitoring agent**. It is designed to be installed and run on all your systems: **physical** and **virtual** servers, **containers**, even **IoT**.
+import { Install, InstallBox } from '../../../src/components/Install/'
 
-The best way to install Netdata is directly from source. Our **automatic installer** will install any required system packages and compile Netdata directly on your systems.
+# Installation guide
 
-!!! warning
-    You can find Netdata packages distributed by third parties. In many cases, these packages are either too old or broken. So, the suggested ways to install Netdata are the ones in this page.
-    **We are currently working to provide our binary packages for all Linux distros.** Stay tuned...
+Netdata is a monitoring agent designed to run on all your systems: physical and virtual servers, containers, even
+IoT/edge devices. Netdata runs on Linux, FreeBSD, macOS, Kubernetes, Docker, and all their derivatives.
 
-1. [Automatic one line installation](#one-line-installation), easy installation from source, **this is the default**
-2. [Install pre-built static binary on any 64bit Linux](#linux-64bit-pre-built-static-binary)
-3. [Run Netdata in a docker container](#run-netdata-in-a-docker-container)
-4. [Manual installation, step by step](#install-netdata-on-linux-manually)
-5. [Install on FreeBSD](#freebsd)
-6. [Install on pfSense](#pfsense)
-7. [Enable on FreeNAS Corral](#freenas)
-8. [Install on macOS (OS X)](#macos)
+The best way to install Netdata is with our [**automatic one-line installation
+script**](#automatic-one-line-installation-script), which works with all Linux distributions and macOS environments, or our [**.deb/rpm
+packages**](/packaging/installer/methods/packages.md), which seamlessly install with your distribution's package
+manager.
 
-See also the list of Netdata [package maintainers](../maintainers) for ASUSTOR NAS, OpenWRT, ReadyNAS, etc.
+If you want to install Netdata with Docker, on a Kubernetes cluster, or a different operating system, see [Have a
+different operating system, or want to try another
+method?](#have-a-different-operating-system-or-want-to-try-another-method)
 
----
+Some third parties, such as the packaging teams at various Linux distributions, distribute old, broken, or altered
+packages. We recommend you install Netdata using one of the methods listed below to guarantee you get the latest
+checksum-verified packages.
 
-## One line installation
+Netdata collects anonymous usage information by default and sends it to our self hosted [PostHog](https://github.com/PostHog/posthog) installation. PostHog is an open source product analytics platform, you can read
+about the information collected, and learn how to-opt, on our [anonymous statistics](/docs/anonymous-statistics.md)
+page.
 
-> This method is **fully automatic on all Linux** distributions. FreeBSD and MacOS systems need some preparations before installing Netdata for the first time. Check the [FreeBSD](#freebsd) and the [MacOS](#macos) sections for more information.
+The usage statistics are _vital_ for us, as we use them to discover bugs and prioritize new features. We thank you for
+_actively_ contributing to Netdata's future.
 
-To install Netdata from source and keep it up to date automatically, run the following:
+## Automatic one-line installation script
+
+![](https://registry.my-netdata.io/api/v1/badge.svg?chart=web_log_nginx.requests_per_url&options=unaligned&dimensions=kickstart&group=sum&after=-3600&label=last+hour&units=installations&value_color=orange&precision=0) ![](https://registry.my-netdata.io/api/v1/badge.svg?chart=web_log_nginx.requests_per_url&options=unaligned&dimensions=kickstart&group=sum&after=-86400&label=today&units=installations&precision=0)
+
+This method is fully automatic on all Linux distributions, including Ubuntu, Debian, Fedora, CentOS, and others, as well as on mac OS environments.
+
+To install Netdata from source, including all dependencies required to connect to Netdata Cloud, and get _automatic
+nightly updates_, run the following as your normal user:
+
+**Linux**
 
 ```bash
 bash <(curl -Ss https://my-netdata.io/kickstart.sh)
 ```
 
-*(do not `sudo` this command, it will do it by itself as needed)*
-
-![](https://registry.my-netdata.io/api/v1/badge.svg?chart=web_log_nginx.requests_per_url&options=unaligned&dimensions=kickstart&group=sum&after=-3600&label=last+hour&units=installations&value_color=orange&precision=0) ![](https://registry.my-netdata.io/api/v1/badge.svg?chart=web_log_nginx.requests_per_url&options=unaligned&dimensions=kickstart&group=sum&after=-86400&label=today&units=installations&precision=0)
-
-<details markdown="1"><summary>Click here for more information and advanced use of this command.</summary>
-
-&nbsp;<br/>
-Verify the integrity of the script with this:
+**macOS**
 
 ```bash
-[ "b66c99c065abe1cf104c11236d4e8747" = "$(curl -Ss https://my-netdata.io/kickstart.sh | md5sum | cut -d ' ' -f 1)" ] && echo "OK, VALID" || echo "FAILED, INVALID"
+bash <(curl -Ss https://my-netdata.io/kickstart.sh) --install /usr/local/
 ```
-*It should print `OK, VALID` if the script is the one we ship.*
 
-The `kickstart.sh` script:
+To see more information about this installation script, including how to disable automatic updates, get nightly vs.
+stable releases, or disable anonymous statistics, see the [`kickstart.sh` method
+page](/packaging/installer/methods/kickstart.md). 
 
-- detects the Linux distro and **installs the required system packages** for building Netdata (will ask for confirmation)
-- downloads the latest Netdata source tree to `/usr/src/netdata.git`.
-- installs Netdata by running `./netdata-installer.sh` from the source tree.
-- installs `netdata-updater.sh` to `cron.daily`, so your Netdata installation will be updated daily (you will get a message from cron only if the update fails).
-- For QA purposes, this installation method lets us know if it succeed or failed.
+Scroll down for details about [automatic updates](#automatic-updates) or [nightly vs. stable
+releases](#nightly-vs-stable-releases).
 
-The `kickstart.sh` script passes all its parameters to `netdata-installer.sh`, so you can add more parameters to change the installation directory, enable/disable plugins, etc (check below).
+### Post-installation
 
-For automated installs, append a space + `--dont-wait` to the command line. You can also append `--dont-start-it` to prevent the installer from starting Netdata. Example:
+When you're finished with installation, check out our [single-node](/docs/quickstart/single-node.md) or
+[infrastructure](/docs/quickstart/infrastructure.md) monitoring quickstart guides based on your use case.
+
+Or, skip straight to [configuring the Netdata Agent](/docs/configure/nodes.md).
+
+Read through Netdata's [documentation](https://learn.netdata.cloud/docs), which is structured based on actions and
+solutions, to enable features like health monitoring, alarm notifications, long-term metrics storage, exporting to
+external databases, and more.
+
+## Have a different operating system, or want to try another method?
+
+Netdata works on many different operating systems, each with a few possible installation methods. To see the full list
+of approved methods for each operating system/version we support, see our [distribution
+matrix](/packaging/DISTRIBUTIONS.md).
+
+Below, you can find a few additional installation methods, followed by separate instructions for a variety of unique
+operating systems.
+
+### Alternative methods
+
+<Install>
+  <InstallBox
+    to="/docs/agent/packaging/installer/methods/kickstart"
+    os="General Linux with one-line installer (recommended)"
+    svg="linux" />
+  <InstallBox
+    to="/docs/agent/packaging/docker"
+    os="Run with Docker" 
+    svg="docker" />
+  <InstallBox
+    to="/docs/agent/packaging/installer/methods/kubernetes"
+    os="Deploy on Kubernetes" 
+    svg="kubernetes" />
+   <InstallBox
+    to="/docs/agent/packaging/installer/methods/macos"
+    os="Install on macOS" 
+    svg="macos" />
+  <InstallBox
+    to="/docs/agent/packaging/installer/methods/packages"
+    os="Linux with .deb/.rpm packages" 
+    svg="linux" />
+  <InstallBox
+    to="/docs/agent/packaging/installer/methods/kickstart-64"
+    os="Linux with static 64-bit binary" 
+    svg="linux" />
+  <InstallBox
+    to="/docs/agent/packaging/installer/methods/manual"
+    os="Linux from Git" 
+    svg="linux" />
+  <InstallBox
+    to="/docs/agent/packaging/installer/methods/source"
+    os="Linux from source"
+    svg="linux" />
+  <InstallBox
+    to="/docs/agent/packaging/installer/methods/offline" 
+    os="Linux for offline nodes"
+    svg="linux" />
+</Install>
+
+## Automatic updates
+
+By default, Netdata's installation scripts enable automatic updates for both nightly and stable release channels.
+
+If you would prefer to update your Netdata agent manually, you can disable automatic updates by using the `--no-updates`
+option when you install or update Netdata using the [automatic one-line installation
+script](#automatic-one-line-installation-script).
 
 ```bash
-  bash <(curl -Ss https://my-netdata.io/kickstart.sh) --dont-wait --dont-start-it
+bash <(curl -Ss https://my-netdata.io/kickstart.sh) --no-updates
 ```
 
-If you don't want to receive automatic updates, add `--no-updates` when executing `kickstart.sh` script.
+With automatic updates disabled, you can choose exactly when and how you [update
+Netdata](/packaging/installer/UPDATE.md).
 
-</details>&nbsp;<br/>
+### Network usage of Netdata’s automatic updater
 
-Once Netdata is installed, see [Getting Started](../../docs/GettingStarted.md).
+The auto-update functionality set up by the installation scripts requires working internet access to function
+correctly. In particular, it currently requires access to GitHub (to check if a newer version of the updater script
+is available or not, as well as potentially fetching build-time dependencies that are bundled as part of the install),
+and Google Cloud Storage (to check for newer versions of Netdata and download the sources if there is a newer version).
 
----
+Note that the auto-update functionality will check for updates to itself independently of updates to Netdata,
+and will try to use the latest version of the updater script whenever possible. This is intended to reduce the
+amount of effort required by users to get updates working again in the event of a bug in the updater code.
 
-## Linux 64bit pre-built static binary
+## Nightly vs. stable releases
 
-You can install a pre-compiled static binary of Netdata on any Intel/AMD 64bit Linux system
-(even those that don't have a package manager, like CoreOS, CirrOS, busybox systems, etc).
-You can also use these packages on systems with broken or unsupported package managers.
+The Netdata team maintains two releases of the Netdata agent: **nightly** and **stable**. By default, Netdata's
+installation scripts will give you **automatic, nightly** updates, as that is our recommended configuration.
 
-To install Netdata with a binary package on any Linux distro, any kernel version - for **Intel/AMD 64bit** hosts, run the following:
+**Nightly**: We create nightly builds every 24 hours. They contain fully-tested code that fixes bugs or security flaws,
+or introduces new features to Netdata. Every nightly release is a candidate for then becoming a stable release—when
+we're ready, we simply change the release tags on GitHub. That means nightly releases are stable and proven to function
+correctly in the vast majority of Netdata use cases. That's why nightly is the _best choice for most Netdata users_.
+
+**Stable**: We create stable releases whenever we believe the code has reached a major milestone. Most often, stable
+releases correlate with the introduction of new, significant features. Stable releases might be a better choice for
+those who run Netdata in _mission-critical production systems_, as updates will come more infrequently, and only after
+the community helps fix any bugs that might have been introduced in previous releases.
+
+**Pros of using nightly releases:**
+
+-   Get the latest features and bug fixes as soon as they're available
+-   Receive security-related fixes immediately
+-   Use stable, fully-tested code that's always improving
+-   Leverage the same Netdata experience our community is using
+
+**Pros of using stable releases:**
+
+-   Protect yourself from the rare instance when major bugs slip through our testing and negatively affect a Netdata
+    installation
+-   Retain more control over the Netdata version you use
+
+## Troubleshooting and known issues
+
+We are tracking a few issues related to installation and packaging.
+
+### Older distributions (Ubuntu 14.04, Debian 8, CentOS 6) and OpenSSL
+
+If you're running an older Linux distribution or one that has reached EOL, such as Ubuntu 14.04 LTS, Debian 8, or CentOS
+6, your Agent may not be able to securely connect to Netdata Cloud due to an outdated version of OpenSSL. These old
+versions of OpenSSL cannot perform [hostname validation](https://wiki.openssl.org/index.php/Hostname_validation), which
+helps securely encrypt SSL connections.
+
+We recommend you reinstall Netdata with a [static build](/packaging/installer/methods/kickstart-64.md), which uses an
+up-to-date version of OpenSSL with hostname validation enabled.
+
+If you choose to continue using the outdated version of OpenSSL, your node will still connect to Netdata Cloud, albeit
+with hostname verification disabled. Without verification, your Netdata Cloud connection could be vulnerable to
+man-in-the-middle attacks.
+
+### CentOS 6 and CentOS 8
+
+To install the Agent on certain CentOS and RHEL systems, you must enable non-default repositories, such as EPEL or
+PowerTools, to gather hard dependencies. See the [CentOS 6](/packaging/installer/methods/manual.md#centos-rehel-6-x) and
+[CentOS 8](/packaging/installer/methods/manual.md#centos-rehel-8-x) sections for more information.
+
+### Access to file is not permitted
+
+If you see an error similar to `Access to file is not permitted: /usr/share/netdata/web//index.html` when you try to
+visit the Agent dashboard at `http://NODE:19999`, you need to update Netdata's permissions to match those of your
+system.
+
+Run `ls -la /usr/share/netdata/web/index.html` to find the file's permissions. You may need to change this path based on
+the error you're seeing in your browser. In the below example, the file is owned by the user `netdata` and the group
+`netdata`.
 
 ```bash
-
-  bash <(curl -Ss https://my-netdata.io/kickstart-static64.sh)
-
+ls -la /usr/share/netdata/web/index.html
+-rw-r--r--. 1 netdata netdata 89377 May  5 06:30 /usr/share/netdata/web/index.html
 ```
 
-*(do not `sudo` this command, it will do it by itself as needed; if the target system does not have `bash` installed, see below for instructions to run it without `bash`)*
+Open your `netdata.conf` file and find the `[web]` section, plus the `web files owner`/`web files group` settings. Edit
+the lines to match the output from `ls -la` above and uncomment them if necessary.
 
-![](https://registry.my-netdata.io/api/v1/badge.svg?chart=web_log_nginx.requests_per_url&options=unaligned&dimensions=kickstart64&group=sum&after=-3600&label=last+hour&units=installations&value_color=orange&precision=0) ![](https://registry.my-netdata.io/api/v1/badge.svg?chart=web_log_nginx.requests_per_url&options=unaligned&dimensions=kickstart64&group=sum&after=-86400&label=today&units=installations&precision=0)
-
-> The static builds install Netdata at **`/opt/netdata`**
-
-<details markdown="1"><summary>Click here for more information and advanced use of this command.</summary>
-
-&nbsp;<br/>
-Verify the integrity of the script with this:
-
-```bash
-[ "8e6df9b6f6cc7de0d73f6e5e51a3c8c2" = "$(curl -Ss https://my-netdata.io/kickstart-static64.sh | md5sum | cut -d ' ' -f 1)" ] && echo "OK, VALID" || echo "FAILED, INVALID"
+```conf
+[web]
+    web files owner = netdata
+    web files group = netdata
 ```
 
-*It should print `OK, VALID` if the script is the one we ship.*
+Save the file, restart Netdata using `sudo systemctl restart netdata`, or the [appropriate
+method](/docs/configure/start-stop-restart.md) for your system, and try accessing the dashboard again.
 
-For automated installs, append a space + `--dont-wait` to the command line. You can also append `--dont-start-it` to prevent the installer from starting Netdata.
+### Multiple versions of OpenSSL
 
-Example:
+We've received reports from the community about issues with running the `kickstart.sh` script on systems that have both
+a distribution-installed version of OpenSSL and a manually-installed local version. The Agent's installer cannot handle
+both.
 
-```bash
+We recommend you install Netdata with the [static binary](/packaging/installer/methods/kickstart-64.md) to avoid the
+issue altogether. Or, you can manually remove one version of OpenSSL to remove the conflict.
 
-  bash <(curl -Ss https://my-netdata.io/kickstart-static64.sh) --dont-wait --dont-start-it
+### Clang compiler on Linux
 
-```
+Our current build process has some issues when using certain configurations of the `clang` C compiler on Linux. See [the
+section on `nonrepresentable section on output`
+errors](/packaging/installer/methods/manual.md#nonrepresentable-section-on-output-errors) for a workaround.
 
-If your shell fails to handle the above one liner, do this:
-
-```bash
-# download the script with curl
-curl https://my-netdata.io/kickstart-static64.sh >/tmp/kickstart-static64.sh
-
-# or, download the script with wget
-wget -O /tmp/kickstart-static64.sh https://my-netdata.io/kickstart-static64.sh
-
-# run the downloaded script (any sh is fine, no need for bash)
-sh /tmp/kickstart-static64.sh
-```
-
-- The static binary files are kept in repo [binary-packages](https://github.com/netdata/binary-packages). You can download any of the `.run` files, and run it. These files are self-extracting shell scripts built with [makeself](https://github.com/megastep/makeself).
-- The target system does **not** need to have bash installed.
-- The same files can be used for updates too.
-- For QA purposes, this installation method lets us know if it succeed or failed.
-
-</details>&nbsp;<br/>
-
-Once Netdata is installed, see [Getting Started](../../docs/GettingStarted.md).
-
----
-
-## Run Netdata in a Docker container
-
-You can [Install Netdata with Docker](../docker/#install-netdata-with-docker).
-
----
-
-## Install Netdata on Linux manually
-
-To install the latest git version of Netdata, please follow these 2 steps:
-
-1. [Prepare your system](#prepare-your-system)
-
-   Install the required packages on your system.
-
-2. [Install Netdata](#install-netdata)
-
-   Download and install Netdata. You can also update it the same way.
-
----
-
-### Prepare your system
-
-Try our experimental automatic requirements installer (no need to be root). This will try to find the packages that should be installed on your system to build and run Netdata. It supports most major Linux distributions released after 2010:
-
-- **Alpine** Linux and its derivatives (you have to install `bash` yourself, before using the installer)
-- **Arch** Linux and its derivatives
-- **Gentoo** Linux and its derivatives
-- **Debian** Linux and its derivatives (including **Ubuntu**, **Mint**)
-- **Fedora** and its derivatives (including **Red Hat Enterprise Linux**, **CentOS**, **Amazon Machine Image**)
-- **SuSe** Linux and its derivatives (including **openSuSe**)
-- **SLE12** Must have your system registered with Suse Customer Center or have the DVD. See [#1162](https://github.com/netdata/netdata/issues/1162)
-
-Install the packages for having a **basic Netdata installation** (system monitoring and many applications, without  `mysql` / `mariadb`, `postgres`, `named`, hardware sensors and `SNMP`):
-
-```sh
-curl -Ss 'https://raw.githubusercontent.com/netdata/netdata-demo-site/master/install-required-packages.sh' >/tmp/kickstart.sh && bash /tmp/kickstart.sh -i netdata
-```
-
-Install all the required packages for **monitoring everything Netdata can monitor**:
-
-```sh
-curl -Ss 'https://raw.githubusercontent.com/netdata/netdata-demo-site/master/install-required-packages.sh' >/tmp/kickstart.sh && bash /tmp/kickstart.sh -i netdata-all
-```
-
-If the above do not work for you, please [open a github issue](https://github.com/netdata/netdata/issues/new?title=packages%20installer%20failed&labels=installation%20help&body=The%20experimental%20packages%20installer%20failed.%0A%0AThis%20is%20what%20it%20says:%0A%0A%60%60%60txt%0A%0Aplease%20paste%20your%20screen%20here%0A%0A%60%60%60) with a copy of the message you get on screen. We are trying to make it work everywhere (this is also why the script [reports back](https://github.com/netdata/netdata/issues/2054) success or failure for all its runs).
-
----
-
-This is how to do it by hand:
-
-```sh
-# Debian / Ubuntu
-apt-get install zlib1g-dev uuid-dev libmnl-dev gcc make git autoconf autoconf-archive autogen automake pkg-config curl
-
-# Fedora
-dnf install zlib-devel libuuid-devel libmnl-devel gcc make git autoconf autoconf-archive autogen automake pkgconfig curl findutils
-
-# CentOS / Red Hat Enterprise Linux
-yum install autoconf automake curl gcc git libmnl-devel libuuid-devel lm_sensors make MySQL-python nc pkgconfig python python-psycopg2 PyYAML zlib-devel
-
-```
-
-Please note that for RHEL/CentOS you might need [EPEL](http://www.tecmint.com/how-to-enable-epel-repository-for-rhel-centos-6-5/).
-
-Once Netdata is compiled, to run it the following packages are required (already installed using the above commands):
-
-package|description
-:-----:|-----------
-`libuuid`|part of `util-linux` for GUIDs management
-`zlib`|gzip compression for the internal Netdata web server
-
-*Netdata will fail to start without the above.*
-
-Netdata plugins and various aspects of Netdata can be enabled or benefit when these are installed (they are optional):
-
-package|description
-:-----:|-----------
-`bash`|for shell plugins and **alarm notifications**
-`curl`|for shell plugins and **alarm notifications**
-`iproute` or `iproute2`|for monitoring **Linux traffic QoS**<br/>use `iproute2` if `iproute` reports as not available or obsolete
-`python`|for most of the external plugins
-`python-yaml`|used for monitoring **beanstalkd**
-`python-beanstalkc`|used for monitoring **beanstalkd**
-`python-dnspython`|used for monitoring DNS query time
-`python-ipaddress`|used for monitoring **DHCPd**<br/>this package is required only if the system has python v2. python v3 has this functionality embedded
-`python-mysqldb`<br/>or<br/>`python-pymysql`|used for monitoring **mysql** or **mariadb** databases<br/>`python-mysqldb` is a lot faster and thus preferred
-`python-psycopg2`|used for monitoring **postgresql** databases
-`python-pymongo`|used for monitoring **mongodb** databases
-`nodejs`|used for `node.js` plugins for monitoring **named** and **SNMP** devices
-`lm-sensors`|for monitoring **hardware sensors**
-`libmnl`|for collecting netfilter metrics
-`netcat`|for shell plugins to collect metrics from remote systems
-
-*Netdata will greatly benefit if you have the above packages installed, but it will still work without them.*
-
----
-
-### Install Netdata
-
-Do this to install and run Netdata:
-
-```sh
-
-# download it - the directory 'netdata' will be created
-git clone https://github.com/netdata/netdata.git --depth=100
-cd netdata
-
-# run script with root privileges to build, install, start Netdata
-./netdata-installer.sh
-
-```
-
-* If you don't want to run it straight-away, add `--dont-start-it` option.
-
-* If you don't want to install it on the default directories, you can run the installer like this: `./netdata-installer.sh --install /opt`. This one will install Netdata in `/opt/netdata`.
-
-* If your server does not have access to the internet and you have manually put the installation directory on your server, you will need to pass the option `--disable-go` to the installer. The option will prevent the installer from attempting to download and install `go.d.plugin`. 
-
-Once the installer completes, the file `/etc/netdata/netdata.conf` will be created (if you changed the installation directory, the configuration will appear in that directory too).
-
-You can edit this file to set options. One common option to tweak is `history`, which controls the size of the memory database Netdata will use. By default is `3600` seconds (an hour of data at the charts) which makes Netdata use about 10-15MB of RAM (depending on the number of charts detected on your system). Check **[[Memory Requirements]]**.
-
-To apply the changes you made, you have to restart Netdata.
-
----
-
-## Other Systems
-
-
-
-##### FreeBSD
-
-You can install Netdata from ports or packages collection.
-
-This is how to install the latest Netdata version from sources on FreeBSD:
-
-```sh
-# install required packages
-pkg install bash e2fsprogs-libuuid git curl autoconf automake pkgconf pidof
-
-# download Netdata
-git clone https://github.com/netdata/netdata.git --depth=100
-
-# install Netdata in /opt/netdata
-cd netdata
-./netdata-installer.sh --install /opt
-```
-
-##### pfSense
-To install Netdata on pfSense run the following commands (within a shell or under Diagnostics/Command Prompt within the pfSense web interface).
-
-Change platform (i386/amd64, etc) and FreeBSD versions (10/11, etc) according to your environment and change Netdata version (1.10.0 in example) according to latest version present within the FreeSBD repository:-
-
-Note first three packages are downloaded from the pfSense repository for maintaining compatibility with pfSense, Netdata is downloaded from the FreeBSD repository.
-```
-pkg install pkgconf
-pkg install bash
-pkg install e2fsprogs-libuuid
-pkg add http://pkg.freebsd.org/FreeBSD:11:amd64/latest/All/netdata-1.11.0.txz
-```
-To start Netdata manually run `service netdata onestart`
-
-To start Netdata automatically at each boot add `service netdata start` as a Shellcmd within the pfSense web interface (under **Services/Shellcmd**, which you need to install beforehand under **System/Package Manager/Available Packages**).
-Shellcmd Type should be set to `Shellcmd`.
-![](https://user-images.githubusercontent.com/36808164/36930790-4db3aa84-1f0d-11e8-8752-cdc08bb7207c.png)
-Alternatively more information can be found in https://doc.pfsense.org/index.php/Installing_FreeBSD_Packages, for achieving the same via the command line and scripts.
-
-If you experience an issue with `/usr/bin/install` absense on pfSense 2.3 or earlier, update pfSense or use workaround from [https://redmine.pfsense.org/issues/6643](https://redmine.pfsense.org/issues/6643)
-
-##### FreeNAS
-On FreeNAS-Corral-RELEASE (>=10.0.3), Netdata is pre-installed.
-
-To use Netdata, the service will need to be enabled and started from the FreeNAS **[CLI](https://github.com/freenas/cli)**.
-
-To enable the Netdata service:
-```
-service netdata config set enable=true
-```
-
-To start the netdata service:
-```
-service netdata start
-```
-
-##### macOS
-
-Netdata on macOS still has limited charts, but external plugins do work.
-
-You can either install Netdata with [Homebrew](https://brew.sh/)
-
-```sh
-brew install netdata
-```
-
-or from source:
-
-```sh
-# install Xcode Command Line Tools
-xcode-select --install
-```
-click `Install` in the software update popup window, then
-```sh
-# install HomeBrew package manager
-/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
-
-# install required packages
-brew install ossp-uuid autoconf automake pkg-config
-
-# download Netdata
-git clone https://github.com/netdata/netdata.git --depth=100
-
-# install Netdata in /usr/local/netdata
-cd netdata
-sudo ./netdata-installer.sh --install /usr/local
-```
-
-The installer will also install a startup plist to start Netdata when your Mac boots.
-
-##### Alpine 3.x
-
-Execute these commands to install Netdata in Alpine Linux 3.x:
-
-```
-# install required packages
-apk add alpine-sdk bash curl zlib-dev util-linux-dev libmnl-dev gcc make git autoconf automake pkgconfig python logrotate
-
-# if you plan to run node.js Netdata plugins
-apk add nodejs
-
-# download Netdata - the directory 'netdata' will be created
-git clone https://github.com/netdata/netdata.git --depth=100
-cd netdata
-
-
-# build it, install it, start it
-./netdata-installer.sh
-
-
-# make Netdata start at boot
-echo -e "#!/usr/bin/env bash\n/usr/sbin/netdata" >/etc/local.d/netdata.start
-chmod 755 /etc/local.d/netdata.start
-
-# make Netdata stop at shutdown
-echo -e "#!/usr/bin/env bash\nkillall netdata" >/etc/local.d/netdata.stop
-chmod 755 /etc/local.d/netdata.stop
-
-# enable the local service to start automatically
-rc-update add local
-```
-
-##### Synology
-
-The documentation previously recommended installing the Debian Chroot package from the Synology community package sources and then running Netdata from within the chroot. This does not work, as the chroot environment does not have access to `/proc`, and therefore exposes very few metrics to Netdata. Additionally, [this issue](https://github.com/SynoCommunity/spksrc/issues/2758), still open as of 2018/06/24, indicates that the Debian Chroot package is not suitable for DSM versions greater than version 5 and may corrupt system libraries and render the NAS unable to boot.
-
-The good news is that the 64-bit static installer works fine if your NAS is one that uses the amd64 architecture. It will install the content into `/opt/netdata`, making future removal safe and simple.
-
-When Netdata is first installed, it will run as _root_. This may or may not be acceptable for you, and since other installations run it as the _netdata_ user, you might wish to do the same. This requires some extra work:
-
-1. Creat a group `netdata` via the Synology group interface. Give it no access to anything.
-2. Create a user `netdata` via the Synology user interface. Give it no access to anything and a random password. Assign the user to the `netdata` group. Netdata will chuid to this user when running.
-3. Change ownership of the following directories, as defined in [Netdata Security](../../docs/netdata-security.md#security-design):
-
-```
-$ chown -R root:netdata /opt/netdata/usr/share/netdata
-$ chown -R netdata:netdata /opt/netdata/var/lib/netdata /opt/netdata/var/cache/netdata
-$ chown -R netdata:root /opt/netdata/var/log/netdata
-```
-
-Additionally, as of 2018/06/24, the Netdata installer doesn't recognize DSM as an operating system, so no init script is installed. You'll have to do this manually:
-
-1. Add [this file](https://gist.github.com/oskapt/055d474d7bfef32c49469c1b53e8225f) as `/etc/rc.netdata`. Make it executable with `chmod 0755 /etc/rc.netdata`.
-2. Edit `/etc/rc.local` and add a line calling `/etc/rc.netdata` to have it start on boot:
-
-```
-# Netdata startup
-[ -x /etc/rc.netdata ] && /etc/rc.netdata start
-```
-
-[![analytics](https://www.google-analytics.com/collect?v=1&aip=1&t=pageview&_s=1&ds=github&dr=https%3A%2F%2Fgithub.com%2Fnetdata%2Fnetdata&dl=https%3A%2F%2Fmy-netdata.io%2Fgithub%2Finstaller%2FREADME&_u=MAC~&cid=5792dfd7-8dc4-476b-af31-da2fdb9f93d2&tid=UA-64295674-3)]()
+[![analytics](https://www.google-analytics.com/collect?v=1&aip=1&t=pageview&_s=1&ds=github&dr=https%3A%2F%2Fgithub.com%2Fnetdata%2Fnetdata&dl=https%3A%2F%2Fmy-netdata.io%2Fgithub%2Fpackaging%2Finstaller%2FREADME&_u=MAC~&cid=5792dfd7-8dc4-476b-af31-da2fdb9f93d2&tid=UA-64295674-3)](<>)

@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 # Description: freeradius netdata python.d module
-# Author: l2isbad
+# Author: ilyam8
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import re
 from subprocess import Popen, PIPE
 
-from bases.collection import find_binary
 from bases.FrameworkServices.SimpleService import SimpleService
+from bases.collection import find_binary
 
 update_every = 15
 

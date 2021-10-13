@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Description:
-# Author: Ilya Mashchenko (l2isbad)
+# Author: Ilya Mashchenko (ilyam8)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 import logging
@@ -13,7 +13,7 @@ try:
 except ImportError:
     from time import time
 
-from bases.collection import on_try_except_finally
+from bases.collection import on_try_except_finally, unicode_str
 
 
 LOGGING_LEVELS = {'CRITICAL': 50,
@@ -26,7 +26,7 @@ LOGGING_LEVELS = {'CRITICAL': 50,
 DEFAULT_LOG_LINE_FORMAT = '%(asctime)s: %(name)s %(levelname)s : %(message)s'
 DEFAULT_LOG_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
-PYTHON_D_LOG_LINE_FORMAT = '%(asctime)s: %(name)s %(levelname)s: %(module_name)s: %(job_name)s: %(message)s'
+PYTHON_D_LOG_LINE_FORMAT = '%(asctime)s: %(name)s %(levelname)s: %(module_name)s[%(job_name)s] : %(message)s'
 PYTHON_D_LOG_NAME = 'python.d'
 
 
@@ -121,23 +121,23 @@ class BaseLogger(object):
             self.logger.setLevel(LOGGING_LEVELS[level])
 
     def debug(self, *msg, **kwargs):
-        self.logger.debug(' '.join(map(str, msg)), **kwargs)
+        self.logger.debug(' '.join(map(unicode_str, msg)), **kwargs)
 
     def info(self, *msg, **kwargs):
-        self.logger.info(' '.join(map(str, msg)), **kwargs)
+        self.logger.info(' '.join(map(unicode_str, msg)), **kwargs)
 
     def warning(self, *msg, **kwargs):
-        self.logger.warning(' '.join(map(str, msg)), **kwargs)
+        self.logger.warning(' '.join(map(unicode_str, msg)), **kwargs)
 
     def error(self, *msg, **kwargs):
-        self.logger.error(' '.join(map(str, msg)), **kwargs)
+        self.logger.error(' '.join(map(unicode_str, msg)), **kwargs)
 
     def alert(self, *msg,  **kwargs):
-        self.logger.critical(' '.join(map(str, msg)), **kwargs)
+        self.logger.critical(' '.join(map(unicode_str, msg)), **kwargs)
 
     @on_try_except_finally(on_finally=(exit, 1))
     def fatal(self, *msg, **kwargs):
-        self.logger.critical(' '.join(map(str, msg)), **kwargs)
+        self.logger.critical(' '.join(map(unicode_str, msg)), **kwargs)
 
 
 class PythonDLogger(object):

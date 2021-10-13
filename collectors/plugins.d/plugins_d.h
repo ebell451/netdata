@@ -3,7 +3,7 @@
 #ifndef NETDATA_PLUGINS_D_H
 #define NETDATA_PLUGINS_D_H 1
 
-#include "../../daemon/common.h"
+#include "daemon/common.h"
 
 #define NETDATA_PLUGIN_HOOK_PLUGINSD \
     { \
@@ -20,6 +20,7 @@
 #define PLUGINSD_FILE_SUFFIX ".plugin"
 #define PLUGINSD_FILE_SUFFIX_LEN strlen(PLUGINSD_FILE_SUFFIX)
 #define PLUGINSD_CMD_MAX (FILENAME_MAX*2)
+#define PLUGINSD_STOCK_PLUGINS_DIRECTORY_PATH 0
 
 #define PLUGINSD_KEYWORD_CHART "CHART"
 #define PLUGINSD_KEYWORD_DIMENSION "DIMENSION"
@@ -28,8 +29,16 @@
 #define PLUGINSD_KEYWORD_FLUSH "FLUSH"
 #define PLUGINSD_KEYWORD_DISABLE "DISABLE"
 #define PLUGINSD_KEYWORD_VARIABLE "VARIABLE"
+#define PLUGINSD_KEYWORD_LABEL "LABEL"
+#define PLUGINSD_KEYWORD_OVERWRITE "OVERWRITE"
+#define PLUGINSD_KEYWORD_GUID "GUID"
+#define PLUGINSD_KEYWORD_CONTEXT "CONTEXT"
+#define PLUGINSD_KEYWORD_TOMBSTONE "TOMBSTONE"
+#define PLUGINSD_KEYWORD_HOST "HOST"
+
 
 #define PLUGINSD_LINE_MAX 1024
+#define PLUGINSD_LINE_MAX_SSL_READ 512
 #define PLUGINSD_MAX_WORDS 20
 
 #define PLUGINSD_MAX_DIRECTORIES 20
@@ -56,7 +65,7 @@ struct plugind {
     volatile sig_atomic_t enabled;      // if this is enabled or not
 
     time_t started_t;
-
+    uint32_t version;
     struct plugind *next;
 };
 
@@ -65,9 +74,11 @@ extern struct plugind *pluginsd_root;
 extern void *pluginsd_main(void *ptr);
 
 extern size_t pluginsd_process(RRDHOST *host, struct plugind *cd, FILE *fp, int trust_durations);
-extern int pluginsd_split_words(char *str, char **words, int max_words);
+extern int pluginsd_split_words(char *str, char **words, int max_words, char *recover_string, char **recover_location, int max_recover);
 
-extern int quoted_strings_splitter(char *str, char **words, int max_words, int (*custom_isspace)(char));
+extern int pluginsd_initialize_plugin_directories();
+
 extern int config_isspace(char c);
+extern int pluginsd_space(char c);
 
 #endif /* NETDATA_PLUGINS_D_H */

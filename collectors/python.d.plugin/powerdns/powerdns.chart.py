@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
 # Description: powerdns netdata python.d module
-# Author: Ilya Mashchenko (l2isbad)
+# Author: Ilya Mashchenko (ilyam8)
 # Author: Luke Whitworth
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 from json import loads
 
 from bases.FrameworkServices.UrlService import UrlService
-
 
 ORDER = [
     'questions',
@@ -125,6 +124,7 @@ class Service(UrlService):
         UrlService.__init__(self, configuration=configuration, name=name)
         self.order = ORDER
         self.definitions = CHARTS
+        self.url = configuration.get('url', 'http://127.0.0.1:8081/api/v1/servers/localhost/statistics')
 
     def check(self):
         self._manager = self._build_manager()

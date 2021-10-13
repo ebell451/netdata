@@ -22,7 +22,7 @@
 #define STATSD_FIRST_PTR_MUTEX_UNLOCK(index) netdata_mutex_unlock(&((index)->first_mutex))
 #define STATSD_DICTIONARY_OPTIONS DICTIONARY_FLAG_DEFAULT
 #else
-#define STATSD_AVL_TREE avl_tree
+#define STATSD_AVL_TREE avl_tree_type
 #define STATSD_AVL_INSERT avl_insert
 #define STATSD_AVL_SEARCH avl_search
 #define STATSD_AVL_INDEX_INIT { .root = NULL, .compar = statsd_metric_compare }
@@ -107,7 +107,7 @@ typedef enum statsd_metric_type {
 
 
 typedef struct statsd_metric {
-    avl avl;                        // indexing - has to be first
+    avl_t avl;                      // indexing - has to be first
 
     const char *name;               // the name of the metric
     uint32_t hash;                  // hash of the name
@@ -153,7 +153,7 @@ typedef struct statsd_index {
 
     STATSD_METRIC *first;           // the linked list of metrics (new metrics are added in front)
     STATSD_METRIC *first_useful;    // the linked list of useful metrics (new metrics are added in front)
-    STATSD_FIRST_PTR_MUTEX;         // when mutli-threading is enabled, a lock to protect the linked list
+    STATSD_FIRST_PTR_MUTEX;         // when multi-threading is enabled, a lock to protect the linked list
 
     STATS_METRIC_OPTIONS default_options;  // default options for all metrics in this index
 } STATSD_INDEX;
@@ -182,7 +182,7 @@ typedef struct statsd_app_chart_dimension {
 
     SIMPLE_PATTERN *metric_pattern; // set when the 'metric' is a simple pattern
 
-    collected_number multiplier;    // the multipler of the dimension
+    collected_number multiplier;    // the multiplier of the dimension
     collected_number divisor;       // the divisor of the dimension
     RRDDIM_FLAGS flags;             // the RRDDIM flags for this dimension
 
@@ -196,13 +196,13 @@ typedef struct statsd_app_chart_dimension {
 } STATSD_APP_CHART_DIM;
 
 typedef struct statsd_app_chart {
-    const char *source;
     const char *id;
     const char *name;
     const char *title;
     const char *family;
     const char *context;
     const char *units;
+    const char *module;
     long priority;
     RRDSET_TYPE chart_type;
     STATSD_APP_CHART_DIM *dimensions;
@@ -376,7 +376,7 @@ static inline STATSD_METRIC *statsd_metric_index_find(STATSD_INDEX *index, const
     tmp.name = name;
     tmp.hash = (hash)?hash:simple_hash(tmp.name);
 
-    return (STATSD_METRIC *)STATSD_AVL_SEARCH(&index->index, (avl *)&tmp);
+    return (STATSD_METRIC *)STATSD_AVL_SEARCH(&index->index, (avl_t *)&tmp);
 }
 
 static inline STATSD_METRIC *statsd_find_or_add_metric(STATSD_INDEX *index, const char *name, STATSD_METRIC_TYPE type) {
@@ -398,7 +398,7 @@ static inline STATSD_METRIC *statsd_find_or_add_metric(STATSD_INDEX *index, cons
             m->histogram.ext = callocz(sizeof(STATSD_METRIC_HISTOGRAM_EXTENSIONS), 1);
             netdata_mutex_init(&m->histogram.ext->mutex);
         }
-        STATSD_METRIC *n = (STATSD_METRIC *)STATSD_AVL_INSERT(&index->index, (avl *)m);
+        STATSD_METRIC *n = (STATSD_METRIC *)STATSD_AVL_INSERT(&index->index, (avl_t *)m);
         if(unlikely(n != m)) {
             freez((void *)m->histogram.ext);
             freez((void *)m->name);
@@ -698,7 +698,10 @@ static inline size_t statsd_process(char *buffer, size_t size, int require_newli
 
         s = name_end = (char *)statsd_parse_skip_up_to(name = s, ':', '|');
         if(name == name_end) {
-            s = statsd_parse_skip_spaces(s);
+            if (*s) {
+                s++;
+                s = statsd_parse_skip_spaces(s);
+            }
             continue;
         }
 
@@ -1014,7 +1017,8 @@ void *statsd_collector_thread(void *ptr) {
             , statsd_rcv_callback
             , statsd_snd_callback
             , statsd_timer_callback
-            , NULL
+            , NULL                     // No access control pattern
+            , 0                        // No dns lookups for access control pattern
             , (void *)d
             , 0                        // tcp request timeout, 0 = disabled
             , statsd.tcp_idle_timeout  // tcp idle timeout, 0 = disabled
@@ -1067,7 +1071,7 @@ static const char *valuetype2string(STATSD_APP_CHART_DIM_VALUE_TYPE type) {
 }
 
 static STATSD_APP_CHART_DIM *add_dimension_to_app_chart(
-        STATSD_APP *app
+        STATSD_APP *app __maybe_unused
         , STATSD_APP_CHART *chart
         , const char *metric_name
         , const char *dim_name
@@ -1210,10 +1214,15 @@ static int statsd_readfile(const char *filename, STATSD_APP *app, STATSD_APP_CHA
                     chart->next = app->charts;
                     app->charts = chart;
 
-                    {
-                        char lineandfile[FILENAME_MAX + 1];
-                        snprintfz(lineandfile, FILENAME_MAX, "%zu@%s", line, filename);
-                        chart->source = strdupz(lineandfile);
+                    if (!strncmp(
+                            filename,
+                            netdata_configured_stock_config_dir,
+                            strlen(netdata_configured_stock_config_dir))) {
+                        char tmpfilename[FILENAME_MAX + 1];
+                        strncpyz(tmpfilename, filename, FILENAME_MAX);
+                        chart->module = strdupz(basename(tmpfilename));
+                    } else {
+                        chart->module = strdupz("synthetic_chart");
                     }
                 }
             }
@@ -1323,7 +1332,7 @@ static int statsd_readfile(const char *filename, STATSD_APP *app, STATSD_APP_CHA
             else if (!strcmp(name, "dimension")) {
                 // metric [name [type [multiplier [divisor]]]]
                 char *words[10];
-                pluginsd_split_words(value, words, 10);
+                pluginsd_split_words(value, words, 10, NULL, NULL, 0);
 
                 int pattern = 0;
                 size_t i = 0;
@@ -1336,7 +1345,7 @@ static int statsd_readfile(const char *filename, STATSD_APP *app, STATSD_APP_CHA
 
                 char *dim_name      = words[i++];
                 char *type          = words[i++];
-                char *multipler     = words[i++];
+                char *multiplier    = words[i++];
                 char *divisor       = words[i++];
                 char *options       = words[i++];
 
@@ -1367,7 +1376,7 @@ static int statsd_readfile(const char *filename, STATSD_APP *app, STATSD_APP_CHA
                         , chart
                         , metric_name
                         , dim_name
-                        , (multipler && *multipler)?str2l(multipler):1
+                        , (multiplier && *multiplier)?str2l(multiplier):1
                         , (divisor && *divisor)?str2l(divisor):1
                         , flags
                         , string2valuetype(type, line, filename)
@@ -1992,7 +2001,7 @@ static inline void statsd_update_app_chart(STATSD_APP *app, STATSD_APP_CHART *ch
                 , chart->title              // title
                 , chart->units              // units
                 , PLUGIN_STATSD_NAME        // plugin
-                , chart->source             // module
+                , chart->module             // module
                 , chart->priority           // priority
                 , statsd.update_every       // update every
                 , chart->chart_type         // chart type
@@ -2222,7 +2231,7 @@ void *statsd_main(void *ptr) {
     // ----------------------------------------------------------------------------------------------------------------
     // statsd setup
 
-    if(!statsd.enabled) return NULL;
+    if(!statsd.enabled) goto cleanup;
 
     statsd_listen_sockets_setup();
     if(!statsd.sockets.opened) {
@@ -2414,7 +2423,7 @@ void *statsd_main(void *ptr) {
             , NULL
             , "statsd"
             , "netdata.statsd_cpu"
-            , "NetData statsd charting thread CPU usage"
+            , "Netdata statsd charting thread CPU usage"
             , "milliseconds/s"
             , PLUGIN_STATSD_NAME
             , "stats"
@@ -2432,7 +2441,7 @@ void *statsd_main(void *ptr) {
         char title[100 + 1];
 
         snprintfz(id, 100, "plugin_statsd_collector%d_cpu", i + 1);
-        snprintfz(title, 100, "NetData statsd collector thread No %d CPU usage", i + 1);
+        snprintfz(title, 100, "Netdata statsd collector thread No %d CPU usage", i + 1);
 
         statsd.collection_threads_status[i].st_cpu = rrdset_create_localhost(
                 "netdata"

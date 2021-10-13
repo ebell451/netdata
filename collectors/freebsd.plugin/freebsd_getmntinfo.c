@@ -124,7 +124,7 @@ static struct mount_point *get_mount_point(const char *name) {
 int do_getmntinfo(int update_every, usec_t dt) {
     (void)dt;
 
-#define DELAULT_EXCLUDED_PATHS "/proc/*"
+#define DEFAULT_EXCLUDED_PATHS "/proc/*"
 // taken from gnulib/mountlist.c and shortened to FreeBSD related fstypes
 #define DEFAULT_EXCLUDED_FILESYSTEMS "autofs procfs subfs devfs none"
 #define CONFIG_SECTION_GETMNTINFO "plugin:freebsd:getmntinfo"
@@ -144,7 +144,7 @@ int do_getmntinfo(int update_every, usec_t dt) {
 
         excluded_mountpoints = simple_pattern_create(
                 config_get(CONFIG_SECTION_GETMNTINFO, "exclude space metrics on paths",
-                           DELAULT_EXCLUDED_PATHS)
+                           DEFAULT_EXCLUDED_PATHS)
                 , NULL
                 , SIMPLE_PATTERN_EXACT
         );
@@ -216,7 +216,9 @@ int do_getmntinfo(int update_every, usec_t dt) {
 
                 int rendered = 0;
 
-                if (m->do_space == CONFIG_BOOLEAN_YES || (m->do_space == CONFIG_BOOLEAN_AUTO && (mntbuf[i].f_blocks > 2))) {
+                if (m->do_space == CONFIG_BOOLEAN_YES || (m->do_space == CONFIG_BOOLEAN_AUTO &&
+                                                          (mntbuf[i].f_blocks > 2 ||
+                                                           netdata_zero_metrics_enabled == CONFIG_BOOLEAN_YES))) {
                     if (unlikely(!m->st_space)) {
                         snprintfz(title, 4096, "Disk Space Usage for %s [%s]",
                                   mntbuf[i].f_mntonname, mntbuf[i].f_mntfromname);
@@ -255,7 +257,9 @@ int do_getmntinfo(int update_every, usec_t dt) {
 
                 // --------------------------------------------------------------------------
 
-                if (m->do_inodes == CONFIG_BOOLEAN_YES || (m->do_inodes == CONFIG_BOOLEAN_AUTO && (mntbuf[i].f_files > 1))) {
+                if (m->do_inodes == CONFIG_BOOLEAN_YES || (m->do_inodes == CONFIG_BOOLEAN_AUTO &&
+                                                           (mntbuf[i].f_files > 1 ||
+                                                            netdata_zero_metrics_enabled == CONFIG_BOOLEAN_YES))) {
                     if (unlikely(!m->st_inodes)) {
                         snprintfz(title, 4096, "Disk Files (inodes) Usage for %s [%s]",
                                   mntbuf[i].f_mntonname, mntbuf[i].f_mntfromname);

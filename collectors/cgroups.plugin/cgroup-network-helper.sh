@@ -122,18 +122,20 @@ proc_pid_fdinfo_iff() {
 
 find_tun_tap_interfaces_for_cgroup() {
     local c="${1}" # the cgroup path
+    [ -d "${c}/emulator" ] && c="${c}/emulator" # check for 'emulator' subdirectory
+    c="${c}/cgroup.procs" # make full path
 
     # for each pid of the cgroup
     # find any tun/tap devices linked to the pid
-    if [ -f "${c}/emulator/cgroup.procs" ]
+    if [ -f "${c}" ]
     then
         local p
-        for p in $(< "${c}/emulator/cgroup.procs" )
+        for p in $(< "${c}" )
         do
             proc_pid_fdinfo_iff "${p}"
         done
     else
-        debug "Cannot find file '${c}/emulator/cgroup.procs', not searching for tun/tap interfaces."
+        debug "Cannot find file '${c}', not searching for tun/tap interfaces."
     fi
 }
 
@@ -166,18 +168,26 @@ virsh_find_all_interfaces_for_cgroup() {
     then
         local d
         d="$(virsh_cgroup_to_domain_name "${c}")"
+        # convert hex to character
+        # e.g.: vm01\x2dweb => vm01-web (https://github.com/netdata/netdata/issues/11088#issuecomment-832618149)
+        d="$(printf '%b' "${d}")"
 
         if [ ! -z "${d}" ]
         then
             debug "running: virsh domiflist ${d}; to find the network interfaces"
 
-            # match only 'network' interfaces from virsh output
+            # 'virsh -r domiflist <domain>' example output
+            # Interface  Type       Source     Model       MAC
+            #--------------------------------------------------------------
+            # vnet3       bridge    br0        virtio   52:54:00:xx:xx:xx
+            # vnet4       network   default    virtio   52:54:00:yy:yy:yy
 
+            # match only 'network' interfaces from virsh output
             set_source "virsh"
             "${virsh}" -r domiflist "${d}" |\
                 sed -n \
-                    -e "s|^\([^[:space:]]\+\)[[:space:]]\+network[[:space:]]\+\([^[:space:]]\+\)[[:space:]]\+[^[:space:]]\+[[:space:]]\+[^[:space:]]\+$|\1 \1_\2|p" \
-                    -e "s|^\([^[:space:]]\+\)[[:space:]]\+bridge[[:space:]]\+\([^[:space:]]\+\)[[:space:]]\+[^[:space:]]\+[[:space:]]\+[^[:space:]]\+$|\1 \1_\2|p"
+                    -e "s|^[[:space:]]\?\([^[:space:]]\+\)[[:space:]]\+network[[:space:]]\+\([^[:space:]]\+\)[[:space:]]\+[^[:space:]]\+[[:space:]]\+[^[:space:]]\+$|\1 \1_\2|p" \
+                    -e "s|^[[:space:]]\?\([^[:space:]]\+\)[[:space:]]\+bridge[[:space:]]\+\([^[:space:]]\+\)[[:space:]]\+[^[:space:]]\+[[:space:]]\+[^[:space:]]\+$|\1 \1_\2|p"
         else
             debug "no virsh domain extracted from cgroup ${c}"
         fi

@@ -145,7 +145,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                         total_disk_writes += diskstat.bytes_write;
                     }
 
-                    st = rrdset_find_bytype_localhost("disk", diskstat.name);
+                    st = rrdset_find_active_bytype_localhost("disk", diskstat.name);
                     if (unlikely(!st)) {
                         st = rrdset_create_localhost(
                                 "disk"
@@ -155,7 +155,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                                 , "disk.io"
                                 , "Disk I/O Bandwidth"
                                 , "KiB/s"
-                                , "macos"
+                                , "macos.plugin"
                                 , "iokit"
                                 , 2000
                                 , update_every
@@ -183,7 +183,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                         CFNumberGetValue(number, kCFNumberSInt64Type, &diskstat.writes);
                     }
 
-                    st = rrdset_find_bytype_localhost("disk_ops", diskstat.name);
+                    st = rrdset_find_active_bytype_localhost("disk_ops", diskstat.name);
                     if (unlikely(!st)) {
                         st = rrdset_create_localhost(
                                 "disk_ops"
@@ -193,7 +193,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                                 , "disk.ops"
                                 , "Disk Completed I/O Operations"
                                 , "operations/s"
-                                , "macos"
+                                , "macos.plugin"
                                 , "iokit"
                                 , 2001
                                 , update_every
@@ -222,7 +222,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                         CFNumberGetValue(number, kCFNumberSInt64Type, &diskstat.time_write);
                     }
 
-                    st = rrdset_find_bytype_localhost("disk_util", diskstat.name);
+                    st = rrdset_find_active_bytype_localhost("disk_util", diskstat.name);
                     if (unlikely(!st)) {
                         st = rrdset_create_localhost(
                                 "disk_util"
@@ -232,7 +232,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                                 , "disk.util"
                                 , "Disk Utilization Time"
                                 , "% of time working"
-                                , "macos"
+                                , "macos.plugin"
                                 , "iokit"
                                 , 2004
                                 , update_every
@@ -260,7 +260,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                         CFNumberGetValue(number, kCFNumberSInt64Type, &diskstat.latency_write);
                     }
 
-                    st = rrdset_find_bytype_localhost("disk_iotime", diskstat.name);
+                    st = rrdset_find_active_bytype_localhost("disk_iotime", diskstat.name);
                     if (unlikely(!st)) {
                         st = rrdset_create_localhost(
                                 "disk_iotime"
@@ -270,7 +270,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                                 , "disk.iotime"
                                 , "Disk Total I/O Time"
                                 , "milliseconds/s"
-                                , "macos"
+                                , "macos.plugin"
                                 , "iokit"
                                 , 2022
                                 , update_every
@@ -297,7 +297,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
 
                         // --------------------------------------------------------------------
 
-                        st = rrdset_find_bytype_localhost("disk_await", diskstat.name);
+                        st = rrdset_find_active_bytype_localhost("disk_await", diskstat.name);
                         if (unlikely(!st)) {
                             st = rrdset_create_localhost(
                                     "disk_await"
@@ -307,7 +307,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                                     , "disk.await"
                                     , "Average Completed I/O Operation Time"
                                     , "milliseconds/operation"
-                                    , "macos"
+                                    , "macos.plugin"
                                     , "iokit"
                                     , 2005
                                     , update_every
@@ -328,7 +328,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
 
                         // --------------------------------------------------------------------
 
-                        st = rrdset_find_bytype_localhost("disk_avgsz", diskstat.name);
+                        st = rrdset_find_active_bytype_localhost("disk_avgsz", diskstat.name);
                         if (unlikely(!st)) {
                             st = rrdset_create_localhost(
                                     "disk_avgsz"
@@ -338,7 +338,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                                     , "disk.avgsz"
                                     , "Average Completed I/O Operation Bandwidth"
                                     , "KiB/operation"
-                                    , "macos"
+                                    , "macos.plugin"
                                     , "iokit"
                                     , 2006
                                     , update_every
@@ -359,7 +359,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
 
                         // --------------------------------------------------------------------
 
-                        st = rrdset_find_bytype_localhost("disk_svctm", diskstat.name);
+                        st = rrdset_find_active_bytype_localhost("disk_svctm", diskstat.name);
                         if (unlikely(!st)) {
                             st = rrdset_create_localhost(
                                     "disk_svctm"
@@ -369,7 +369,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                                     , "disk.svctm"
                                     , "Average Service Time"
                                     , "milliseconds/operation"
-                                    , "macos"
+                                    , "macos.plugin"
                                     , "iokit"
                                     , 2007
                                     , update_every
@@ -401,7 +401,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
     }
 
     if (likely(do_io)) {
-        st = rrdset_find_bytype_localhost("system", "io");
+        st = rrdset_find_active_bytype_localhost("system", "io");
         if (unlikely(!st)) {
             st = rrdset_create_localhost(
                     "system"
@@ -411,7 +411,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                     , NULL
                     , "Disk I/O"
                     , "KiB/s"
-                    , "macos"
+                    , "macos.plugin"
                     , "iokit"
                     , 150
                     , update_every
@@ -453,7 +453,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                 // --------------------------------------------------------------------------
 
                 if (likely(do_space)) {
-                    st = rrdset_find_bytype_localhost("disk_space", mntbuf[i].f_mntonname);
+                    st = rrdset_find_active_bytype_localhost("disk_space", mntbuf[i].f_mntonname);
                     if (unlikely(!st)) {
                         snprintfz(title, 4096, "Disk Space Usage for %s [%s]", mntbuf[i].f_mntonname, mntbuf[i].f_mntfromname);
                         st = rrdset_create_localhost(
@@ -464,7 +464,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                                 , "disk.space"
                                 , title
                                 , "GiB"
-                                , "macos"
+                                , "macos.plugin"
                                 , "iokit"
                                 , 2023
                                 , update_every
@@ -486,7 +486,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                 // --------------------------------------------------------------------------
 
                 if (likely(do_inodes)) {
-                    st = rrdset_find_bytype_localhost("disk_inodes", mntbuf[i].f_mntonname);
+                    st = rrdset_find_active_bytype_localhost("disk_inodes", mntbuf[i].f_mntonname);
                     if (unlikely(!st)) {
                         snprintfz(title, 4096, "Disk Files (inodes) Usage for %s [%s]", mntbuf[i].f_mntonname, mntbuf[i].f_mntfromname);
                         st = rrdset_create_localhost(
@@ -497,7 +497,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                                 , "disk.inodes"
                                 , title
                                 , "inodes"
-                                , "macos"
+                                , "macos.plugin"
                                 , "iokit"
                                 , 2024
                                 , update_every
@@ -533,7 +533,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
 
                 // --------------------------------------------------------------------
 
-                st = rrdset_find_bytype_localhost("net", ifa->ifa_name);
+                st = rrdset_find_active_bytype_localhost("net", ifa->ifa_name);
                 if (unlikely(!st)) {
                     st = rrdset_create_localhost(
                             "net"
@@ -543,7 +543,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                             , "net.net"
                             , "Bandwidth"
                             , "kilobits/s"
-                            , "macos"
+                            , "macos.plugin"
                             , "iokit"
                             , 7000
                             , update_every
@@ -561,7 +561,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
 
                 // --------------------------------------------------------------------
 
-                st = rrdset_find_bytype_localhost("net_packets", ifa->ifa_name);
+                st = rrdset_find_active_bytype_localhost("net_packets", ifa->ifa_name);
                 if (unlikely(!st)) {
                     st = rrdset_create_localhost(
                             "net_packets"
@@ -571,7 +571,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                             , "net.packets"
                             , "Packets"
                             , "packets/s"
-                            , "macos"
+                            , "macos.plugin"
                             , "iokit"
                             , 7001
                             , update_every
@@ -594,7 +594,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
 
                 // --------------------------------------------------------------------
 
-                st = rrdset_find_bytype_localhost("net_errors", ifa->ifa_name);
+                st = rrdset_find_active_bytype_localhost("net_errors", ifa->ifa_name);
                 if (unlikely(!st)) {
                     st = rrdset_create_localhost(
                             "net_errors"
@@ -604,7 +604,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                             , "net.errors"
                             , "Interface Errors"
                             , "errors/s"
-                            , "macos"
+                            , "macos.plugin"
                             , "iokit"
                             , 7002
                             , update_every
@@ -623,7 +623,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
 
                 // --------------------------------------------------------------------
 
-                st = rrdset_find_bytype_localhost("net_drops", ifa->ifa_name);
+                st = rrdset_find_active_bytype_localhost("net_drops", ifa->ifa_name);
                 if (unlikely(!st)) {
                     st = rrdset_create_localhost(
                             "net_drops"
@@ -633,7 +633,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                             , "net.drops"
                             , "Interface Drops"
                             , "drops/s"
-                            , "macos"
+                            , "macos.plugin"
                             , "iokit"
                             , 7003
                             , update_every
@@ -650,7 +650,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
 
                 // --------------------------------------------------------------------
 
-                st = rrdset_find_bytype_localhost("net_events", ifa->ifa_name);
+                st = rrdset_find_active_bytype_localhost("net_events", ifa->ifa_name);
                 if (unlikely(!st)) {
                     st = rrdset_create_localhost(
                             "net_events"
@@ -660,7 +660,7 @@ int do_macos_iokit(int update_every, usec_t dt) {
                             , "net.events"
                             , "Network Interface Events"
                             , "events/s"
-                            , "macos"
+                            , "macos.plugin"
                             , "iokit"
                             , 7006
                             , update_every

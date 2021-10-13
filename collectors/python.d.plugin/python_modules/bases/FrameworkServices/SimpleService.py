@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 # Description:
 # Author: Pawel Krupa (paulfantom)
-# Author: Ilya Mashchenko (l2isbad)
+# Author: Ilya Mashchenko (ilyam8)
 # SPDX-License-Identifier: GPL-3.0-or-later
 
-from threading import Thread
+
 from time import sleep, time
 
 from third_party.monotonic import monotonic
 
 from bases.charts import Charts, ChartError, create_runtime_chart
-from bases.collection import OldVersionCompatibility, safe_print
+from bases.collection import safe_print
 from bases.loggers import PythonDLimitedLogger
 
 RUNTIME_CHART_UPDATE = 'BEGIN netdata.runtime_{job_name} {since_last}\n' \
@@ -55,25 +55,29 @@ class RuntimeCounters:
             self.penalty = round(min(self.retries * self.update_every / 2, MAX_PENALTY))
 
 
-class SimpleService(Thread, PythonDLimitedLogger, OldVersionCompatibility, object):
+def clean_module_name(name):
+    if name.startswith('pythond_'):
+        return name[8:]
+    return name
+
+
+class SimpleService(PythonDLimitedLogger, object):
     """
     Prototype of Service class.
     Implemented basic functionality to run jobs by `python.d.plugin`
     """
+
     def __init__(self, configuration, name=''):
         """
         :param configuration: <dict>
         :param name: <str>
         """
-        Thread.__init__(self)
-        self.daemon = True
         PythonDLimitedLogger.__init__(self)
-        OldVersionCompatibility.__init__(self)
         self.configuration = configuration
         self.order = list()
         self.definitions = dict()
 
-        self.module_name = self.__module__
+        self.module_name = clean_module_name(self.__module__)
         self.job_name = configuration.pop('job_name')
         self.override_name = configuration.pop('override_name')
         self.fake_name = None
@@ -91,7 +95,7 @@ class SimpleService(Thread, PythonDLimitedLogger, OldVersionCompatibility, objec
 
     @property
     def name(self):
-        if self.job_name:
+        if self.job_name and self.job_name != self.module_name:
             return '_'.join([self.module_name, self.override_name or self.job_name])
         return self.module_name
 
@@ -233,7 +237,7 @@ class SimpleService(Thread, PythonDLimitedLogger, OldVersionCompatibility, objec
                     continue
             elif self.charts.cleanup and chart.penalty >= self.charts.cleanup:
                 chart.obsolete()
-                self.error("chart '{0}' was suppressed due to non updating".format(chart.name))
+                self.info("chart '{0}' was suppressed due to non updating".format(chart.name))
                 continue
 
             ok = chart.update(data, interval)

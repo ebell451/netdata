@@ -7,6 +7,9 @@
 #
 # Author: Paul Emm. Katsoulakis <paul@netdata.cloud>
 
+apk update || exit 1
+apk upgrade || exit 1
+
 # Add required APK packages
 apk add --no-cache -U \
   alpine-sdk \
@@ -16,10 +19,12 @@ apk add --no-cache -U \
   binutils \
   cmake \
   curl \
+  elfutils-dev \
   gcc \
   git \
   gnutls-dev \
   gzip \
+  libelf-static \
   libmnl-dev \
   libnetfilter_acct-dev \
   libtool \
@@ -34,20 +39,10 @@ apk add --no-cache -U \
   pkgconfig \
   protobuf-dev \
   snappy-dev \
+  snappy-static \
   util-linux-dev \
   wget \
   xz \
   zlib-dev \
   zlib-static ||
   exit 1
-
-# snappy doesn't have static version in alpine, let's compile it
-export SNAPPY_VER="1.1.7"
-wget -O /snappy.tar.gz https://github.com/google/snappy/archive/${SNAPPY_VER}.tar.gz
-tar -C / -xf /snappy.tar.gz
-rm /snappy.tar.gz
-cd /snappy-${SNAPPY_VER} || exit 1
-mkdir build
-cd build || exit 1
-cmake -DCMAKE_BUILD_SHARED_LIBS=true -DCMAKE_INSTALL_PREFIX:PATH=/usr -DCMAKE_INSTALL_LIBDIR=lib ../
-make && make install

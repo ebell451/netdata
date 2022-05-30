@@ -4,15 +4,15 @@
 # shellcheck source=packaging/makeself/functions.sh
 . "$(dirname "${0}")/../functions.sh" "${@}" || exit 1
 
+# shellcheck disable=SC2015
+[ "${GITHUB_ACTIONS}" = "true" ] && echo "::group::Building self-extracting archive" || true
+
 run cd "${NETDATA_SOURCE_PATH}" || exit 1
 
 # -----------------------------------------------------------------------------
 # find the netdata version
 
-VERSION="$(git describe 2> /dev/null)"
-if [ -z "${VERSION}" ]; then
-  VERSION=$(cat packaging/version)
-fi
+VERSION="$("${NETDATA_INSTALL_PARENT}/netdata/bin/netdata" -v | cut -f 2 -d ' ')"
 
 if [ "${VERSION}" == "" ]; then
   echo >&2 "Cannot find version number. Create makeself executable from source code with git tree structure."
@@ -104,5 +104,8 @@ if [ "${BUILDARCH}" = "x86_64" ]; then
   [ -f "artifacts/netdata-${VERSION}.gz.run" ] && rm "netdata-${VERSION}.gz.run"
   run ln -s "./${FILE}" "artifacts/netdata-${VERSION}.gz.run"
 fi
+
+# shellcheck disable=SC2015
+[ "${GITHUB_ACTIONS}" = "true" ] && echo "::endgroup::" || true
 
 echo >&2 "Self-extracting installer moved to 'artifacts/${FILE}'"

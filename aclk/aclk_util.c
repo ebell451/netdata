@@ -7,6 +7,8 @@
 int aclk_use_new_cloud_arch = 0;
 usec_t aclk_session_newarch = 0;
 
+aclk_env_t *aclk_env = NULL;
+
 int chart_batch_id;
 
 aclk_encoding_type_t aclk_encoding_type_t_from_str(const char *str) {
@@ -39,6 +41,7 @@ void aclk_env_t_destroy(aclk_env_t *env) {
         for (size_t i = 0; i < env->transport_count; i++) {
             if(env->transports[i]) {
                 aclk_transport_desc_t_destroy(env->transports[i]);
+                freez(env->transports[i]);
                 env->transports[i] = NULL;
             }
         }
@@ -51,19 +54,17 @@ void aclk_env_t_destroy(aclk_env_t *env) {
     }
 }
 
+int aclk_env_has_capa(const char *capa)
+{
+    for (int i = 0; i < (int) aclk_env->capability_count; i++) {
+        if (!strcasecmp(capa, aclk_env->capabilities[i]))
+            return 1;
+    }
+    return 0;
+}
+
 #ifdef ACLK_LOG_CONVERSATION_DIR
 volatile int aclk_conversation_log_counter = 0;
-#if !defined(HAVE_C___ATOMIC) || defined(NETDATA_NO_ATOMIC_INSTRUCTIONS)
-netdata_mutex_t aclk_conversation_log_mutex = NETDATA_MUTEX_INITIALIZER;
-int aclk_get_conv_log_next()
-{
-    int ret;
-    netdata_mutex_lock(&aclk_conversation_log_mutex);
-    ret = aclk_conversation_log_counter++;
-    netdata_mutex_unlock(&aclk_conversation_log_mutex);
-    return ret;
-}
-#endif
 #endif
 
 #define ACLK_TOPIC_PREFIX "/agent/"
@@ -122,6 +123,7 @@ struct topic_name {
     { .id = ACLK_TOPICID_ALARM_LOG,             .name = "alarm-log"                },
     { .id = ACLK_TOPICID_ALARM_HEALTH,          .name = "alarm-health"             },
     { .id = ACLK_TOPICID_ALARM_CONFIG,          .name = "alarm-config"             },
+    { .id = ACLK_TOPICID_ALARM_SNAPSHOT,        .name = "alarm-snapshot"           },
     { .id = ACLK_TOPICID_UNKNOWN,               .name = NULL                       }
 };
 
@@ -151,6 +153,7 @@ enum aclk_topics compulsory_topics_new_cloud_arch[] = {
     ACLK_TOPICID_ALARM_LOG,
     ACLK_TOPICID_ALARM_HEALTH,
     ACLK_TOPICID_ALARM_CONFIG,
+    ACLK_TOPICID_ALARM_SNAPSHOT,
     ACLK_TOPICID_UNKNOWN
 };
 

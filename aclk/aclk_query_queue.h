@@ -10,7 +10,7 @@
 #include "aclk_util.h"
 
 typedef enum {
-    UNKNOWN,
+    UNKNOWN = 0,
     METADATA_INFO,
     METADATA_ALARMS,
     HTTP_API_V2,
@@ -25,7 +25,9 @@ typedef enum {
     RETENTION_UPDATED,
     UPDATE_NODE_INFO,
     ALARM_LOG_HEALTH,
-    ALARM_PROVIDE_CFG
+    ALARM_PROVIDE_CFG,
+    ALARM_SNAPSHOT,
+    ACLK_QUERY_TYPE_COUNT // always keep this as last
 } aclk_query_type_t;
 
 struct aclk_query_metadata {
@@ -65,7 +67,7 @@ struct aclk_query {
 
     struct timeval created_tv;
     usec_t created;
-
+    int timeout;
     aclk_query_t next;
 
     // TODO maybe remove?
@@ -90,6 +92,7 @@ aclk_query_t aclk_queue_pop(void);
 void aclk_queue_flush(void);
 
 void aclk_queue_lock(void);
+void aclk_queue_unlock(void);
 
 #define QUEUE_IF_PAYLOAD_PRESENT(query)                                                                                \
     if (likely(query->data.bin_payload.payload)) {                                                                     \

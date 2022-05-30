@@ -72,6 +72,7 @@ cgroup-network
 ebpf.plugin
 collectors/ebpf.plugin/reset_netdata_trace.sh
 !ebpf.plugin/
+collectors/ebpf.plugin/includes/
 
 # protoc generated files
 *.pb.cc
@@ -84,6 +85,9 @@ packaging/installer/.environment.sh
 
 # netdata makeself downloads
 packaging/makeself/tmp/
+
+# Libbpf is always overwritten depending of kernel version
+packaging/libbpf.*
 
 # coverity
 cov-int/
@@ -130,10 +134,8 @@ daemon/get-kubernetes-labels.sh
 
 health/notifications/alarm-notify.sh
 claim/netdata-claim.sh
-collectors/cgroups.plugin/cgroup-name.sh
 collectors/tc.plugin/tc-qos-helper.sh
 collectors/charts.d.plugin/charts.d.plugin
-collectors/node.d.plugin/node.d.plugin
 collectors/python.d.plugin/python.d.plugin
 collectors/fping.plugin/fping.plugin
 collectors/ioping.plugin/ioping.plugin
@@ -218,5 +220,11 @@ externaldeps/
 Session.vim
 Session.*.vim
 
+# clangd cache
+.cache/
+
 # Special exceptions
 !packaging/repoconfig/Makefile
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints

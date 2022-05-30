@@ -24,6 +24,7 @@
 #include "ebpf_filesystem.h"
 #include "ebpf_hardirq.h"
 #include "ebpf_cachestat.h"
+#include "ebpf_mdflush.h"
 #include "ebpf_mount.h"
 #include "ebpf_oomkill.h"
 #include "ebpf_shm.h"
@@ -357,12 +358,11 @@ typedef struct ebpf_process_stat {
     //Counter
     uint32_t exit_call;
     uint32_t release_call;
-    uint32_t fork_call;
-    uint32_t clone_call;
+    uint32_t create_process;
+    uint32_t create_thread;
 
     //Counter
-    uint32_t fork_err;
-    uint32_t clone_err;
+    uint32_t task_err;
 
     uint8_t removeme;
 } ebpf_process_stat_t;
@@ -379,6 +379,10 @@ typedef struct ebpf_bandwidth {
     uint64_t retransmit;         // Number of times tcp_retransmit was called
     uint64_t call_udp_sent;      // Number of times udp_sendmsg was called
     uint64_t call_udp_received;  // Number of times udp_recvmsg was called
+    uint64_t close;              // Number of times tcp_close was called
+    uint64_t drop;               // THIS IS NOT USED FOR WHILE, we are in groom section
+    uint32_t tcp_v4_connection;  // Number of times tcp_v4_connection was called.
+    uint32_t tcp_v6_connection;  // Number of times tcp_v6_connection was called.
 } ebpf_bandwidth_t;
 
 /**

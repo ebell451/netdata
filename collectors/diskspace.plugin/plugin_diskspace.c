@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-#include "plugin_diskspace.h"
+#include "../proc.plugin/plugin_proc.h"
 
 #define PLUGIN_DISKSPACE_NAME "diskspace.plugin"
 
@@ -79,6 +79,28 @@ int mount_point_cleanup(void *entry, void *data) {
         rrdset_obsolete_and_pointer_null(mp->st_space);
         rrdset_obsolete_and_pointer_null(mp->st_inodes);
     }
+
+    return 0;
+}
+
+// for the full list of protected mount points look at
+// https://github.com/systemd/systemd/blob/1eb3ef78b4df28a9e9f464714208f2682f957e36/src/core/namespace.c#L142-L149
+// https://github.com/systemd/systemd/blob/1eb3ef78b4df28a9e9f464714208f2682f957e36/src/core/namespace.c#L180-L194
+static const char *systemd_protected_mount_points[] = {
+    "/home",
+    "/root",
+    "/usr",
+    "/boot",
+    "/efi",
+    "/etc",
+    NULL
+};
+
+int mount_point_is_protected(char *mount_point)
+{
+    for (size_t i = 0; systemd_protected_mount_points[i] != NULL; i++)
+        if (!strcmp(mount_point, systemd_protected_mount_points[i]))
+            return 1;
 
     return 0;
 }
@@ -190,7 +212,12 @@ static inline void do_disk_space_stats(struct mountinfo *mi, int update_every) {
     if(unlikely(m->do_space == CONFIG_BOOLEAN_NO && m->do_inodes == CONFIG_BOOLEAN_NO))
         return;
 
-    if(unlikely(mi->flags & MOUNTINFO_READONLY && !m->collected && m->do_space != CONFIG_BOOLEAN_YES && m->do_inodes != CONFIG_BOOLEAN_YES))
+    if (unlikely(
+            mi->flags & MOUNTINFO_READONLY &&
+            !mount_point_is_protected(mi->mount_point) &&
+            !m->collected &&
+            m->do_space != CONFIG_BOOLEAN_YES &&
+            m->do_inodes != CONFIG_BOOLEAN_YES))
         return;
 
     struct statvfs buff_statvfs;
@@ -257,7 +284,7 @@ static inline void do_disk_space_stats(struct mountinfo *mi, int update_every) {
             m->st_space = rrdset_find_active_bytype_localhost("disk_space", disk);
             if(unlikely(!m->st_space)) {
                 char title[4096 + 1];
-                snprintfz(title, 4096, "Disk Space Usage for %s [%s]", family, mi->mount_source);
+                snprintfz(title, 4096, "Disk Space Usage");
                 m->st_space = rrdset_create_localhost(
                         "disk_space"
                         , disk
@@ -299,7 +326,7 @@ static inline void do_disk_space_stats(struct mountinfo *mi, int update_every) {
             m->st_inodes = rrdset_find_active_bytype_localhost("disk_inodes", disk);
             if(unlikely(!m->st_inodes)) {
                 char title[4096 + 1];
-                snprintfz(title, 4096, "Disk Files (inodes) Usage for %s [%s]", family, mi->mount_source);
+                snprintfz(title, 4096, "Disk Files (inodes) Usage");
                 m->st_inodes = rrdset_create_localhost(
                         "disk_inodes"
                         , disk
@@ -338,6 +365,8 @@ static inline void do_disk_space_stats(struct mountinfo *mi, int update_every) {
 }
 
 static void diskspace_main_cleanup(void *ptr) {
+    worker_unregister();
+
     struct netdata_static_thread *static_thread = (struct netdata_static_thread *)ptr;
     static_thread->enabled = NETDATA_MAIN_THREAD_EXITING;
 
@@ -346,10 +375,21 @@ static void diskspace_main_cleanup(void *ptr) {
     static_thread->enabled = NETDATA_MAIN_THREAD_EXITED;
 }
 
-void *diskspace_main(void *ptr) {
-    netdata_thread_cleanup_push(diskspace_main_cleanup, ptr);
+#define WORKER_JOB_MOUNTINFO 0
+#define WORKER_JOB_MOUNTPOINT 1
+#define WORKER_JOB_CLEANUP 2
 
-    int vdo_cpu_netdata = config_get_boolean("plugin:proc", "netdata server resources", 1);
+#if WORKER_UTILIZATION_MAX_JOB_TYPES < 3
+#error WORKER_UTILIZATION_MAX_JOB_TYPES has to be at least 3
+#endif
+
+void *diskspace_main(void *ptr) {
+    worker_register("DISKSPACE");
+    worker_register_job_name(WORKER_JOB_MOUNTINFO, "mountinfo");
+    worker_register_job_name(WORKER_JOB_MOUNTPOINT, "mountpoint");
+    worker_register_job_name(WORKER_JOB_CLEANUP, "cleanup");
+
+    netdata_thread_cleanup_push(diskspace_main_cleanup, ptr);
 
     cleanup_mount_points = config_get_boolean(CONFIG_SECTION_DISKSPACE, "remove charts of unmounted disks" , cleanup_mount_points);
 
@@ -361,14 +401,11 @@ void *diskspace_main(void *ptr) {
     if(check_for_new_mountpoints_every < update_every)
         check_for_new_mountpoints_every = update_every;
 
-    struct rusage thread;
-
-    usec_t duration = 0;
     usec_t step = update_every * USEC_PER_SEC;
     heartbeat_t hb;
     heartbeat_init(&hb);
     while(!netdata_exit) {
-        duration = heartbeat_monotonic_dt_to_now_usec(&hb);
+        worker_is_idle();
         /* usec_t hb_dt = */ heartbeat_next(&hb, step);
 
         if(unlikely(netdata_exit)) break;
@@ -377,8 +414,8 @@ void *diskspace_main(void *ptr) {
         // --------------------------------------------------------------------------
         // this is smart enough not to reload it every time
 
+        worker_is_busy(WORKER_JOB_MOUNTINFO);
         mountinfo_reload(0);
-
 
         // --------------------------------------------------------------------------
         // disk space metrics
@@ -389,80 +426,24 @@ void *diskspace_main(void *ptr) {
             if(unlikely(mi->flags & (MOUNTINFO_IS_DUMMY | MOUNTINFO_IS_BIND)))
                 continue;
 
+            // exclude mounts made by ProtectHome and ProtectSystem systemd hardening options
+            if(mi->flags & MOUNTINFO_READONLY && !strcmp(mi->root, mi->mount_point))
+                continue;
+
+            worker_is_busy(WORKER_JOB_MOUNTPOINT);
             do_disk_space_stats(mi, update_every);
             if(unlikely(netdata_exit)) break;
         }
 
         if(unlikely(netdata_exit)) break;
 
-        if(dict_mountpoints)
+        if(dict_mountpoints) {
+            worker_is_busy(WORKER_JOB_CLEANUP);
             dictionary_get_all(dict_mountpoints, mount_point_cleanup, NULL);
-
-        if(vdo_cpu_netdata) {
-            static RRDSET *stcpu_thread = NULL, *st_duration = NULL;
-            static RRDDIM *rd_user = NULL, *rd_system = NULL, *rd_duration = NULL;
-
-            // ----------------------------------------------------------------
-
-            getrusage(RUSAGE_THREAD, &thread);
-
-            if(unlikely(!stcpu_thread)) {
-                stcpu_thread = rrdset_create_localhost(
-                        "netdata"
-                        , "plugin_diskspace"
-                        , NULL
-                        , "diskspace"
-                        , NULL
-                        , "Netdata Disk Space Plugin CPU usage"
-                        , "milliseconds/s"
-                        , PLUGIN_DISKSPACE_NAME
-                        , NULL
-                        , NETDATA_CHART_PRIO_NETDATA_DISKSPACE
-                        , update_every
-                        , RRDSET_TYPE_STACKED
-                );
-
-                rd_user   = rrddim_add(stcpu_thread, "user", NULL, 1, 1000, RRD_ALGORITHM_INCREMENTAL);
-                rd_system = rrddim_add(stcpu_thread, "system", NULL, 1, 1000, RRD_ALGORITHM_INCREMENTAL);
-            }
-            else
-                rrdset_next(stcpu_thread);
-
-            rrddim_set_by_pointer(stcpu_thread, rd_user, thread.ru_utime.tv_sec * 1000000ULL + thread.ru_utime.tv_usec);
-            rrddim_set_by_pointer(stcpu_thread, rd_system, thread.ru_stime.tv_sec * 1000000ULL + thread.ru_stime.tv_usec);
-            rrdset_done(stcpu_thread);
-
-            // ----------------------------------------------------------------
-
-            if(unlikely(!st_duration)) {
-                st_duration = rrdset_create_localhost(
-                        "netdata"
-                        , "plugin_diskspace_dt"
-                        , NULL
-                        , "diskspace"
-                        , NULL
-                        , "Netdata Disk Space Plugin Duration"
-                        , "milliseconds/run"
-                        , PLUGIN_DISKSPACE_NAME
-                        , NULL
-                        , 132021
-                        , update_every
-                        , RRDSET_TYPE_AREA
-                );
-
-                rd_duration = rrddim_add(st_duration, "duration", NULL, 1, 1000, RRD_ALGORITHM_ABSOLUTE);
-            }
-            else
-                rrdset_next(st_duration);
-
-            rrddim_set_by_pointer(st_duration, rd_duration, duration);
-            rrdset_done(st_duration);
-
-            // ----------------------------------------------------------------
-
-            if(unlikely(netdata_exit)) break;
         }
+
     }
+    worker_unregister();
 
     netdata_thread_cleanup_pop(1);
     return NULL;

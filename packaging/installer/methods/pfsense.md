@@ -25,19 +25,19 @@ pkg install -y pkgconf bash e2fsprogs-libuuid libuv nano
 Then run the following commands to download various dependencies from the FreeBSD repository.
 
 ```sh
-pkg add http://pkg.freebsd.org/FreeBSD:11:amd64/latest/All/Judy-1.0.5_2.txz
-pkg add http://pkg.freebsd.org/FreeBSD:11:amd64/latest/All/json-c-0.15_1.txz
-pkg add http://pkg.freebsd.org/FreeBSD:11:amd64/latest/All/py37-certifi-2020.6.20.txz
-pkg add http://pkg.freebsd.org/FreeBSD:11:amd64/latest/All/py37-asn1crypto-1.3.0.txz
-pkg add http://pkg.freebsd.org/FreeBSD:11:amd64/latest/All/py37-pycparser-2.20.txz
-pkg add http://pkg.freebsd.org/FreeBSD:11:amd64/latest/All/py37-cffi-1.14.3.txz
-pkg add http://pkg.freebsd.org/FreeBSD:11:amd64/latest/All/py37-six-1.15.0.txz
-pkg add http://pkg.freebsd.org/FreeBSD:11:amd64/latest/All/py37-cryptography-2.6.1.txz
-pkg add http://pkg.freebsd.org/FreeBSD:11:amd64/latest/All/py37-idna-2.10.txz
-pkg add http://pkg.freebsd.org/FreeBSD:11:amd64/latest/All/py37-openssl-19.0.0.txz
-pkg add http://pkg.freebsd.org/FreeBSD:11:amd64/latest/All/py37-pysocks-1.7.1.txz
-pkg add http://pkg.freebsd.org/FreeBSD:11:amd64/latest/All/py37-urllib3-1.25.11,1.txz
-pkg add http://pkg.freebsd.org/FreeBSD:11:amd64/latest/All/py37-yaml-5.3.1.txz
+pkg add http://pkg.freebsd.org/FreeBSD:12:amd64/latest/All/Judy-1.0.5_3.txz
+pkg add http://pkg.freebsd.org/FreeBSD:12:amd64/latest/All/json-c-0.15_1.txz
+pkg add http://pkg.freebsd.org/FreeBSD:12:amd64/latest/All/py38-certifi-2021.10.8.txz
+pkg add http://pkg.freebsd.org/FreeBSD:12:amd64/latest/All/py38-asn1crypto-1.4.0.txz
+pkg add http://pkg.freebsd.org/FreeBSD:12:amd64/latest/All/py38-pycparser-2.20.txz
+pkg add http://pkg.freebsd.org/FreeBSD:12:amd64/latest/All/py38-cffi-1.14.6.txz
+pkg add http://pkg.freebsd.org/FreeBSD:12:amd64/latest/All/py38-six-1.16.0.txz
+pkg add http://pkg.freebsd.org/FreeBSD:12:amd64/latest/All/py38-cryptography-3.3.2.txz
+pkg add http://pkg.freebsd.org/FreeBSD:12:amd64/latest/All/py38-idna-2.10.txz
+pkg add http://pkg.freebsd.org/FreeBSD:12:amd64/latest/All/py38-openssl-20.0.1.txz
+pkg add http://pkg.freebsd.org/FreeBSD:12:amd64/latest/All/py38-pysocks-1.7.1.txz
+pkg add http://pkg.freebsd.org/FreeBSD:12:amd64/latest/All/py38-urllib3-1.26.7,1.txz
+pkg add http://pkg.freebsd.org/FreeBSD:12:amd64/latest/All/py38-yaml-5.4.1.txz
 ```
 
 > ⚠️ If any of the above commands return a `Not Found` error, you need to manually search for the latest package in the
@@ -56,7 +56,7 @@ pkg add http://pkg.freebsd.org/FreeBSD:11:amd64/latest/All/py37-yaml-5.3.1.txz
 You can now install Netdata from the FreeBSD repository.
 
 ```bash
-pkg add http://pkg.freebsd.org/FreeBSD:11:amd64/latest/All/netdata-1.28.0.txz
+pkg add http://pkg.freebsd.org/FreeBSD:12:amd64/latest/All/netdata-1.31.0_1.txz
 ```
 
 > ⚠️ If the above command returns a `Not Found` error, you need to manually search for the latest version of Netdata in
@@ -81,4 +81,4 @@ workaround from <https://redmine.pfsense.org/issues/6643>
 
 **Note:** In pfSense, the Netdata configuration files are located under `/usr/local/etc/netdata`.
 
-[![analytics](https://www.google-analytics.com/collect?v=1&aip=1&t=pageview&_s=1&ds=github&dr=https%3A%2F%2Fgithub.com%2Fnetdata%2Fnetdata&dl=https%3A%2F%2Fmy-netdata.io%2Fgithub%2Fpackaging%2Finstaller%2Fmethods%2Fpfsense&_u=MAC~&cid=5792dfd7-8dc4-476b-af31-da2fdb9f93d2&tid=UA-64295674-3)](<>)
+

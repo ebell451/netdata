@@ -21,7 +21,6 @@ from external processes, thus allowing Netdata to use **external plugins**.
 |[nfacct.plugin](/collectors/nfacct.plugin/README.md)|`C`|linux|collects netfilter firewall, connection tracker and accounting metrics using `libmnl` and `libnetfilter_acct`.|
 |[xenstat.plugin](/collectors/xenstat.plugin/README.md)|`C`|linux|collects XenServer and XCP-ng metrics using `lxenstat`.|
 |[perf.plugin](/collectors/perf.plugin/README.md)|`C`|linux|collects CPU performance metrics using performance monitoring units (PMU).|
-|[node.d.plugin](/collectors/node.d.plugin/README.md)|`node.js`|all|a **plugin orchestrator** for data collection modules written in `node.js`.|
 |[python.d.plugin](/collectors/python.d.plugin/README.md)|`python`|all|a **plugin orchestrator** for data collection modules written in `python` v2 or v3 (both are supported).|
 |[slabinfo.plugin](/collectors/slabinfo.plugin/README.md)|`C`|linux|collects kernel internal cache objects (SLAB) metrics.|
 
@@ -74,7 +73,6 @@ Example:
 	# charts.d = yes
 	# fping = yes
 	# ioping = yes
-	# node.d = yes
 	# python.d = yes
 ```
 
@@ -187,7 +185,10 @@ the template is:
 
 -   `name`
 
-    is the name that will be presented to the user instead of `id` in `type.id`. This means that only the `id` part of `type.id` is changed. When a name has been given, the chart is index (and can be referred) as both `type.id` and `type.name`. You can set name to `''`, or `null`, or `(null)` to disable it.
+    is the name that will be presented to the user instead of `id` in `type.id`. This means that only the `id` part of
+    `type.id` is changed. When a name has been given, the chart is indexed (and can be referred) as both `type.id` and
+    `type.name`. You can set name to `''`, or `null`, or `(null)` to disable it. If a chart with the same name already
+    exists, a serial number is automatically attached to the name to avoid naming collisions.
 
 -   `title`
 
@@ -231,7 +232,7 @@ the template is:
 
 -   `options`
 
-    a space separated list of options, enclosed in quotes. 4 options are currently supported: `obsolete` to mark a chart as obsolete (Netdata will hide it and delete it after some time), `detail` to mark a chart as insignificant (this may be used by dashboards to make the charts smaller, or somehow visualize properly a less important chart), `store_first` to make Netdata store the first collected value, assuming there was an invisible previous value set to zero (this is used by statsd charts - if the first data collected value of incremental dimensions is not zero based, unrealistic spikes will appear with this option set) and `hidden` to perform all operations on a chart, but do not offer it on dashboards (the chart will be send to backends). `CHART` options have been added in Netdata v1.7 and the `hidden` option was added in 1.10.
+    a space separated list of options, enclosed in quotes. 4 options are currently supported: `obsolete` to mark a chart as obsolete (Netdata will hide it and delete it after some time), `detail` to mark a chart as insignificant (this may be used by dashboards to make the charts smaller, or somehow visualize properly a less important chart), `store_first` to make Netdata store the first collected value, assuming there was an invisible previous value set to zero (this is used by statsd charts - if the first data collected value of incremental dimensions is not zero based, unrealistic spikes will appear with this option set) and `hidden` to perform all operations on a chart, but do not offer it on dashboards (the chart will be send to external databases). `CHART` options have been added in Netdata v1.7 and the `hidden` option was added in 1.10.
 
 -   `plugin` and `module`
 
@@ -252,7 +253,7 @@ the template is:
     the `id` of this dimension (it is a text value, not numeric),
     this will be needed later to add values to the dimension
 
-    We suggest to avoid using `.` in dimension ids. Backends expect metrics to be `.` separated and people will get confused if a dimension id contains a dot.
+    We suggest to avoid using `.` in dimension ids. External databases expect metrics to be `.` separated and people will get confused if a dimension id contains a dot.
 
 -   `name`
 
@@ -388,17 +389,12 @@ or do not output the line at all.
 
     python is ideal for Netdata plugins. It is a simple, yet powerful way to collect data, it has a very small memory footprint, although it is not the most CPU efficient way to do it.
 
-2.  **node.js**, use `node.d.plugin`, there are a few examples in the [node.d
-    directory](/collectors/node.d.plugin/README.md)
-
-    node.js is the fastest scripting language for collecting data. If your plugin needs to do a lot of work, compute values, etc, node.js is probably the best choice before moving to compiled code. Keep in mind though that node.js is not memory efficient; it will probably need more RAM compared to python.
-
-3.  **BASH**, use `charts.d.plugin`, there are many examples in the [charts.d
+2.  **BASH**, use `charts.d.plugin`, there are many examples in the [charts.d
     directory](/collectors/charts.d.plugin/README.md)
 
     BASH is the simplest scripting language for collecting values. It is the less efficient though in terms of CPU resources. You can use it to collect data quickly, but extensive use of it might use a lot of system resources.
 
-4.  **C**
+3.  **C**
 
     Of course, C is the most efficient way of collecting data. This is why Netdata itself is written in C.
 
@@ -481,4 +477,4 @@ There are a few rules for writing plugins properly:
 
 4.  If possible, try to autodetect if your plugin should be enabled, without any configuration.
 
-[![analytics](https://www.google-analytics.com/collect?v=1&aip=1&t=pageview&_s=1&ds=github&dr=https%3A%2F%2Fgithub.com%2Fnetdata%2Fnetdata&dl=https%3A%2F%2Fmy-netdata.io%2Fgithub%2Fcollectors%2Fplugins.d%2FREADME&_u=MAC~&cid=5792dfd7-8dc4-476b-af31-da2fdb9f93d2&tid=UA-64295674-3)](<>)
+

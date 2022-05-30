@@ -2,27 +2,27 @@
 
 #include "web/api/web_api_v1.h"
 
-static inline void free_single_rrdrim(RRDDIM *temp_rd, int archive_mode)
+static inline void free_single_rrdrim(ONEWAYALLOC *owa, RRDDIM *temp_rd, int archive_mode)
 {
     if (unlikely(!temp_rd))
         return;
 
-    freez((char *)temp_rd->id);
-    freez((char *)temp_rd->name);
+    onewayalloc_freez(owa, (char *)temp_rd->id);
 
     if (unlikely(archive_mode)) {
         temp_rd->rrdset->counter--;
         if (!temp_rd->rrdset->counter) {
-            freez((char *)temp_rd->rrdset->name);
-            freez(temp_rd->rrdset->context);
-            freez(temp_rd->rrdset);
+            onewayalloc_freez(owa, (char *)temp_rd->rrdset->name);
+            onewayalloc_freez(owa, temp_rd->rrdset->context);
+            onewayalloc_freez(owa, temp_rd->rrdset);
         }
     }
-    freez(temp_rd->state);
-    freez(temp_rd);
+
+    onewayalloc_freez(owa, temp_rd->state);
+    onewayalloc_freez(owa, temp_rd);
 }
 
-static inline void free_rrddim_list(RRDDIM *temp_rd, int archive_mode)
+static inline void free_rrddim_list(ONEWAYALLOC *owa, RRDDIM *temp_rd, int archive_mode)
 {
     if (unlikely(!temp_rd))
         return;
@@ -30,22 +30,22 @@ static inline void free_rrddim_list(RRDDIM *temp_rd, int archive_mode)
     RRDDIM *t;
     while (temp_rd) {
         t = temp_rd->next;
-        free_single_rrdrim(temp_rd, archive_mode);
+        free_single_rrdrim(owa, temp_rd, archive_mode);
         temp_rd = t;
     }
 }
 
-void free_context_param_list(struct context_param **param_list)
+void free_context_param_list(ONEWAYALLOC *owa, struct context_param **param_list)
 {
     if (unlikely(!param_list || !*param_list))
         return;
 
-    free_rrddim_list(((*param_list)->rd), (*param_list)->flags & CONTEXT_FLAGS_ARCHIVE);
-    freez((*param_list));
+    free_rrddim_list(owa, ((*param_list)->rd), (*param_list)->flags & CONTEXT_FLAGS_ARCHIVE);
+    onewayalloc_freez(owa, (*param_list));
     *param_list = NULL;
 }
 
-void rebuild_context_param_list(struct context_param *context_param_list, time_t after_requested)
+void rebuild_context_param_list(ONEWAYALLOC *owa, struct context_param *context_param_list, time_t after_requested)
 {
     RRDDIM *temp_rd = context_param_list->rd;
     RRDDIM *new_rd_list = NULL, *t;
@@ -59,19 +59,19 @@ void rebuild_context_param_list(struct context_param *context_param_list, time_t
             temp_rd->next = new_rd_list;
             new_rd_list = temp_rd;
         } else
-            free_single_rrdrim(temp_rd, is_archived);
+            free_single_rrdrim(owa, temp_rd, is_archived);
         temp_rd = t;
     }
     context_param_list->rd = new_rd_list;
 };
 
-void build_context_param_list(struct context_param **param_list, RRDSET *st)
+void build_context_param_list(ONEWAYALLOC *owa, struct context_param **param_list, RRDSET *st)
 {
     if (unlikely(!param_list || !st))
         return;
 
     if (unlikely(!(*param_list))) {
-        *param_list = mallocz(sizeof(struct context_param));
+        *param_list = onewayalloc_mallocz(owa, sizeof(struct context_param));
         (*param_list)->first_entry_t = LONG_MAX;
         (*param_list)->last_entry_t = 0;
         (*param_list)->flags = CONTEXT_FLAGS_CONTEXT;
@@ -86,14 +86,10 @@ void build_context_param_list(struct context_param **param_list, RRDSET *st)
     (*param_list)->last_entry_t  = MAX((*param_list)->last_entry_t, rrdset_last_entry_t_nolock(st));
 
     rrddim_foreach_read(rd1, st) {
-        RRDDIM *rd = mallocz(rd1->memsize);
-        memcpy(rd, rd1, rd1->memsize);
-        rd->id = strdupz(rd1->id);
-        rd->name = strdupz(rd1->name);
-        rd->state = mallocz(sizeof(*rd->state));
-        memcpy(rd->state, rd1->state, sizeof(*rd->state));
-        memcpy(&rd->state->collect_ops, &rd1->state->collect_ops, sizeof(struct rrddim_collect_ops));
-        memcpy(&rd->state->query_ops, &rd1->state->query_ops, sizeof(struct rrddim_query_ops));
+        RRDDIM *rd = onewayalloc_memdupz(owa, rd1, rd1->memsize);
+        rd->id = onewayalloc_strdupz(owa, rd1->id);
+        rd->name = onewayalloc_strdupz(owa, rd1->name);
+        rd->state = onewayalloc_memdupz(owa, rd1->state, sizeof(*rd->state));
         rd->next = (*param_list)->rd;
         (*param_list)->rd = rd;
     }
@@ -167,23 +163,29 @@ int rrdset2value_api_v1(
         , time_t *db_after
         , time_t *db_before
         , int *value_is_null
+        , int timeout
 ) {
+    int ret = HTTP_RESP_INTERNAL_SERVER_ERROR;
 
-    RRDR *r = rrd2rrdr(st, points, after, before, group_method, group_time, options, dimensions, NULL);
+    ONEWAYALLOC *owa = onewayalloc_create(0);
+
+    RRDR *r = rrd2rrdr(owa, st, points, after, before, group_method, group_time, options, dimensions, NULL, timeout);
 
     if(!r) {
         if(value_is_null) *value_is_null = 1;
-        return HTTP_RESP_INTERNAL_SERVER_ERROR;
+        ret = HTTP_RESP_INTERNAL_SERVER_ERROR;
+        goto cleanup;
     }
 
     if(rrdr_rows(r) == 0) {
-        rrdr_free(r);
+        rrdr_free(owa, r);
 
         if(db_after)  *db_after  = 0;
         if(db_before) *db_before = 0;
         if(value_is_null) *value_is_null = 1;
 
-        return HTTP_RESP_BAD_REQUEST;
+        ret = HTTP_RESP_BAD_REQUEST;
+        goto cleanup;
     }
 
     if(wb) {
@@ -197,14 +199,18 @@ int rrdset2value_api_v1(
     if(db_before) *db_before = r->before;
 
     long i = (!(options & RRDR_OPTION_REVERSED))?rrdr_rows(r) - 1:0;
-    *n = rrdr2value(r, i, options, value_is_null);
+    *n = rrdr2value(r, i, options, value_is_null, NULL);
+    ret = HTTP_RESP_OK;
 
-    rrdr_free(r);
-    return HTTP_RESP_OK;
+cleanup:
+    if(r) rrdr_free(owa, r);
+    onewayalloc_destroy(owa);
+    return ret;
 }
 
 int rrdset2anything_api_v1(
-          RRDSET *st
+          ONEWAYALLOC *owa
+        , RRDSET *st
         , BUFFER *wb
         , BUFFER *dimensions
         , uint32_t format
@@ -217,16 +223,26 @@ int rrdset2anything_api_v1(
         , time_t *latest_timestamp
         , struct context_param *context_param_list
         , char *chart_label_key
-) {
-
+        , int max_anomaly_rates
+        , int timeout
+)
+{
     if (context_param_list && !(context_param_list->flags & CONTEXT_FLAGS_ARCHIVE))
         st->last_accessed_time = now_realtime_sec();
 
-    RRDR *r = rrd2rrdr(st, points, after, before, group_method, group_time, options, dimensions?buffer_tostring(dimensions):NULL, context_param_list);
+    RRDR *r = rrd2rrdr(owa, st, points, after, before, group_method, group_time, options, dimensions?buffer_tostring(dimensions):NULL, context_param_list, timeout);
     if(!r) {
         buffer_strcat(wb, "Cannot generate output with these parameters on this chart.");
         return HTTP_RESP_INTERNAL_SERVER_ERROR;
     }
+
+    if (r->result_options & RRDR_RESULT_OPTION_CANCEL) {
+        rrdr_free(owa, r);
+        return HTTP_RESP_BACKEND_FETCH_FAILED;
+    }
+
+    if (st && st->state && st->state->is_ar_chart)
+        ml_process_rrdr(r, max_anomaly_rates);
 
     RRDDIM *temp_rd = context_param_list ? context_param_list->rd : NULL;
 
@@ -243,12 +259,12 @@ int rrdset2anything_api_v1(
         if(options & RRDR_OPTION_JSON_WRAP) {
             wb->contenttype = CT_APPLICATION_JSON;
             rrdr_json_wrapper_begin(r, wb, format, options, 1, context_param_list, chart_label_key);
-            rrdr2ssv(r, wb, options, "", " ", "");
+            rrdr2ssv(r, wb, options, "", " ", "", temp_rd);
             rrdr_json_wrapper_end(r, wb, format, options, 1);
         }
         else {
             wb->contenttype = CT_TEXT_PLAIN;
-            rrdr2ssv(r, wb, options, "", " ", "");
+            rrdr2ssv(r, wb, options, "", " ", "", temp_rd);
         }
         break;
 
@@ -256,12 +272,12 @@ int rrdset2anything_api_v1(
         if(options & RRDR_OPTION_JSON_WRAP) {
             wb->contenttype = CT_APPLICATION_JSON;
             rrdr_json_wrapper_begin(r, wb, format, options, 1, context_param_list, chart_label_key);
-            rrdr2ssv(r, wb, options, "", ",", "");
+            rrdr2ssv(r, wb, options, "", ",", "", temp_rd);
             rrdr_json_wrapper_end(r, wb, format, options, 1);
         }
         else {
             wb->contenttype = CT_TEXT_PLAIN;
-            rrdr2ssv(r, wb, options, "", ",", "");
+            rrdr2ssv(r, wb, options, "", ",", "", temp_rd);
         }
         break;
 
@@ -269,12 +285,12 @@ int rrdset2anything_api_v1(
         if(options & RRDR_OPTION_JSON_WRAP) {
             wb->contenttype = CT_APPLICATION_JSON;
             rrdr_json_wrapper_begin(r, wb, format, options, 0, context_param_list, chart_label_key);
-            rrdr2ssv(r, wb, options, "[", ",", "]");
+            rrdr2ssv(r, wb, options, "[", ",", "]", temp_rd);
             rrdr_json_wrapper_end(r, wb, format, options, 0);
         }
         else {
             wb->contenttype = CT_APPLICATION_JSON;
-            rrdr2ssv(r, wb, options, "[", ",", "]");
+            rrdr2ssv(r, wb, options, "[", ",", "]", temp_rd);
         }
         break;
 
@@ -400,6 +416,6 @@ int rrdset2anything_api_v1(
         break;
     }
 
-    rrdr_free(r);
+    rrdr_free(owa, r);
     return HTTP_RESP_OK;
 }

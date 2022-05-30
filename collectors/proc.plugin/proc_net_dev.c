@@ -75,6 +75,19 @@ static struct netdev {
     const char *chart_id_net_carrier;
     const char *chart_id_net_mtu;
 
+    const char *chart_ctx_net_bytes;
+    const char *chart_ctx_net_packets;
+    const char *chart_ctx_net_errors;
+    const char *chart_ctx_net_fifo;
+    const char *chart_ctx_net_events;
+    const char *chart_ctx_net_drops;
+    const char *chart_ctx_net_compressed;
+    const char *chart_ctx_net_speed;
+    const char *chart_ctx_net_duplex;
+    const char *chart_ctx_net_operstate;
+    const char *chart_ctx_net_carrier;
+    const char *chart_ctx_net_mtu;
+
     const char *chart_family;
 
     struct label *chart_labels;
@@ -241,6 +254,19 @@ static void netdev_free_chart_strings(struct netdev *d) {
     freez((void *)d->chart_id_net_carrier);
     freez((void *)d->chart_id_net_mtu);
 
+    freez((void *)d->chart_ctx_net_bytes);
+    freez((void *)d->chart_ctx_net_compressed);
+    freez((void *)d->chart_ctx_net_drops);
+    freez((void *)d->chart_ctx_net_errors);
+    freez((void *)d->chart_ctx_net_events);
+    freez((void *)d->chart_ctx_net_fifo);
+    freez((void *)d->chart_ctx_net_packets);
+    freez((void *)d->chart_ctx_net_speed);
+    freez((void *)d->chart_ctx_net_duplex);
+    freez((void *)d->chart_ctx_net_operstate);
+    freez((void *)d->chart_ctx_net_carrier);
+    freez((void *)d->chart_ctx_net_mtu);
+
     freez((void *)d->chart_family);
 }
 
@@ -384,39 +410,41 @@ static inline void netdev_rename_cgroup(struct netdev *d, struct netdev_rename *
 
     snprintfz(buffer, RRD_ID_LENGTH_MAX, "net_%s", r->container_device);
     d->chart_id_net_bytes      = strdupz(buffer);
-
     snprintfz(buffer, RRD_ID_LENGTH_MAX, "net_compressed_%s", r->container_device);
     d->chart_id_net_compressed = strdupz(buffer);
-
     snprintfz(buffer, RRD_ID_LENGTH_MAX, "net_drops_%s", r->container_device);
     d->chart_id_net_drops      = strdupz(buffer);
-
     snprintfz(buffer, RRD_ID_LENGTH_MAX, "net_errors_%s", r->container_device);
     d->chart_id_net_errors     = strdupz(buffer);
-
     snprintfz(buffer, RRD_ID_LENGTH_MAX, "net_events_%s", r->container_device);
     d->chart_id_net_events     = strdupz(buffer);
-
     snprintfz(buffer, RRD_ID_LENGTH_MAX, "net_fifo_%s", r->container_device);
     d->chart_id_net_fifo       = strdupz(buffer);
-
     snprintfz(buffer, RRD_ID_LENGTH_MAX, "net_packets_%s", r->container_device);
     d->chart_id_net_packets    = strdupz(buffer);
-
     snprintfz(buffer, RRD_ID_LENGTH_MAX, "net_speed_%s", r->container_device);
     d->chart_id_net_speed      = strdupz(buffer);
-
     snprintfz(buffer, RRD_ID_LENGTH_MAX, "net_duplex_%s", r->container_device);
     d->chart_id_net_duplex     = strdupz(buffer);
-
     snprintfz(buffer, RRD_ID_LENGTH_MAX, "net_operstate_%s", r->container_device);
     d->chart_id_net_operstate  = strdupz(buffer);
-
     snprintfz(buffer, RRD_ID_LENGTH_MAX, "net_carrier_%s", r->container_device);
     d->chart_id_net_carrier    = strdupz(buffer);
-
     snprintfz(buffer, RRD_ID_LENGTH_MAX, "net_mtu_%s", r->container_device);
     d->chart_id_net_mtu        = strdupz(buffer);
+
+    d->chart_ctx_net_bytes      = strdupz("cgroup.net_net");
+    d->chart_ctx_net_compressed = strdupz("cgroup.net_compressed");
+    d->chart_ctx_net_drops      = strdupz("cgroup.net_drops");
+    d->chart_ctx_net_errors     = strdupz("cgroup.net_errors");
+    d->chart_ctx_net_events     = strdupz("cgroup.net_events");
+    d->chart_ctx_net_fifo       = strdupz("cgroup.net_fifo");
+    d->chart_ctx_net_packets    = strdupz("cgroup.net_packets");
+    d->chart_ctx_net_speed      = strdupz("cgroup.net_speed");
+    d->chart_ctx_net_duplex     = strdupz("cgroup.net_duplex");
+    d->chart_ctx_net_operstate  = strdupz("cgroup.net_operstate");
+    d->chart_ctx_net_carrier    = strdupz("cgroup.net_carrier");
+    d->chart_ctx_net_mtu        = strdupz("cgroup.net_mtu");
 
     snprintfz(buffer, RRD_ID_LENGTH_MAX, "net %s", r->container_device);
     d->chart_family = strdupz(buffer);
@@ -541,6 +569,19 @@ static struct netdev *get_netdev(const char *name) {
     d->chart_id_net_carrier    = strdupz(d->name);
     d->chart_id_net_mtu        = strdupz(d->name);
 
+    d->chart_ctx_net_bytes      = strdupz("net.net");
+    d->chart_ctx_net_compressed = strdupz("net.compressed");
+    d->chart_ctx_net_drops      = strdupz("net.drops");
+    d->chart_ctx_net_errors     = strdupz("net.errors");
+    d->chart_ctx_net_events     = strdupz("net.events");
+    d->chart_ctx_net_fifo       = strdupz("net.fifo");
+    d->chart_ctx_net_packets    = strdupz("net.packets");
+    d->chart_ctx_net_speed      = strdupz("net.speed");
+    d->chart_ctx_net_duplex     = strdupz("net.duplex");
+    d->chart_ctx_net_operstate  = strdupz("net.operstate");
+    d->chart_ctx_net_carrier    = strdupz("net.carrier");
+    d->chart_ctx_net_mtu        = strdupz("net.mtu");
+
     d->chart_family = strdupz(d->name);
     d->priority = NETDATA_CHART_PRIO_FIRST_NET_IFACE;
 
@@ -614,7 +655,7 @@ int do_proc_net_dev(int update_every, usec_t dt) {
         do_carrier      = config_get_boolean_ondemand(CONFIG_SECTION_PLUGIN_PROC_NETDEV, "carrier for all interfaces", CONFIG_BOOLEAN_AUTO);
         do_mtu          = config_get_boolean_ondemand(CONFIG_SECTION_PLUGIN_PROC_NETDEV, "mtu for all interfaces", CONFIG_BOOLEAN_AUTO);
 
-        disabled_list = simple_pattern_create(config_get(CONFIG_SECTION_PLUGIN_PROC_NETDEV, "disable by default interfaces matching", "lo fireqos* *-ifb"), NULL, SIMPLE_PATTERN_EXACT);
+        disabled_list = simple_pattern_create(config_get(CONFIG_SECTION_PLUGIN_PROC_NETDEV, "disable by default interfaces matching", "lo fireqos* *-ifb fwpr* fwbr* fwln*"), NULL, SIMPLE_PATTERN_EXACT);
     }
 
     if(unlikely(!ff)) {
@@ -825,7 +866,7 @@ int do_proc_net_dev(int update_every, usec_t dt) {
                         , d->chart_id_net_bytes
                         , NULL
                         , d->chart_family
-                        , "net.net"
+                        , d->chart_ctx_net_bytes
                         , "Bandwidth"
                         , "kilobits/s"
                         , PLUGIN_PROC_NAME
@@ -881,7 +922,7 @@ int do_proc_net_dev(int update_every, usec_t dt) {
                                         , d->chart_id_net_speed
                                         , NULL
                                         , d->chart_family
-                                        , "net.speed"
+                                        , d->chart_ctx_net_speed
                                         , "Interface Speed"
                                         , "kilobits/s"
                                         , PLUGIN_PROC_NAME
@@ -916,7 +957,7 @@ int do_proc_net_dev(int update_every, usec_t dt) {
                         , d->chart_id_net_duplex
                         , NULL
                         , d->chart_family
-                        , "net.duplex"
+                        , d->chart_ctx_net_duplex
                         , "Interface Duplex State"
                         , "state"
                         , PLUGIN_PROC_NAME
@@ -947,7 +988,7 @@ int do_proc_net_dev(int update_every, usec_t dt) {
                         , d->chart_id_net_operstate
                         , NULL
                         , d->chart_family
-                        , "net.operstate"
+                        , d->chart_ctx_net_operstate
                         , "Interface Operational State"
                         , "state"
                         , PLUGIN_PROC_NAME
@@ -978,8 +1019,8 @@ int do_proc_net_dev(int update_every, usec_t dt) {
                         , d->chart_id_net_carrier
                         , NULL
                         , d->chart_family
-                        , "net.carrier"
-                        , "Inteface Physical Link State"
+                        , d->chart_ctx_net_carrier
+                        , "Interface Physical Link State"
                         , "state"
                         , PLUGIN_PROC_NAME
                         , PLUGIN_PROC_MODULE_NETDEV_NAME
@@ -1009,7 +1050,7 @@ int do_proc_net_dev(int update_every, usec_t dt) {
                         , d->chart_id_net_mtu
                         , NULL
                         , d->chart_family
-                        , "net.mtu"
+                        , d->chart_ctx_net_mtu
                         , "Interface MTU"
                         , "octets"
                         , PLUGIN_PROC_NAME
@@ -1045,7 +1086,7 @@ int do_proc_net_dev(int update_every, usec_t dt) {
                         , d->chart_id_net_packets
                         , NULL
                         , d->chart_family
-                        , "net.packets"
+                        , d->chart_ctx_net_packets
                         , "Packets"
                         , "packets/s"
                         , PLUGIN_PROC_NAME
@@ -1093,7 +1134,7 @@ int do_proc_net_dev(int update_every, usec_t dt) {
                         , d->chart_id_net_errors
                         , NULL
                         , d->chart_family
-                        , "net.errors"
+                        , d->chart_ctx_net_errors
                         , "Interface Errors"
                         , "errors/s"
                         , PLUGIN_PROC_NAME
@@ -1139,7 +1180,7 @@ int do_proc_net_dev(int update_every, usec_t dt) {
                         , d->chart_id_net_drops
                         , NULL
                         , d->chart_family
-                        , "net.drops"
+                        , d->chart_ctx_net_drops
                         , "Interface Drops"
                         , "drops/s"
                         , PLUGIN_PROC_NAME
@@ -1185,7 +1226,7 @@ int do_proc_net_dev(int update_every, usec_t dt) {
                         , d->chart_id_net_fifo
                         , NULL
                         , d->chart_family
-                        , "net.fifo"
+                        , d->chart_ctx_net_fifo
                         , "Interface FIFO Buffer Errors"
                         , "errors"
                         , PLUGIN_PROC_NAME
@@ -1231,7 +1272,7 @@ int do_proc_net_dev(int update_every, usec_t dt) {
                         , d->chart_id_net_compressed
                         , NULL
                         , d->chart_family
-                        , "net.compressed"
+                        , d->chart_ctx_net_compressed
                         , "Compressed Packets"
                         , "packets/s"
                         , PLUGIN_PROC_NAME
@@ -1277,7 +1318,7 @@ int do_proc_net_dev(int update_every, usec_t dt) {
                         , d->chart_id_net_events
                         , NULL
                         , d->chart_family
-                        , "net.events"
+                        , d->chart_ctx_net_events
                         , "Network Interface Events"
                         , "events/s"
                         , PLUGIN_PROC_NAME
@@ -1342,4 +1383,40 @@ int do_proc_net_dev(int update_every, usec_t dt) {
     netdev_cleanup();
 
     return 0;
+}
+
+static void netdev_main_cleanup(void *ptr)
+{
+    UNUSED(ptr);
+
+    info("cleaning up...");
+
+    worker_unregister();
+}
+
+void *netdev_main(void *ptr)
+{
+    worker_register("NETDEV");
+    worker_register_job_name(0, "netdev");
+
+    netdata_thread_cleanup_push(netdev_main_cleanup, ptr);
+
+    usec_t step = localhost->rrd_update_every * USEC_PER_SEC;
+    heartbeat_t hb;
+    heartbeat_init(&hb);
+
+    while (!netdata_exit) {
+        worker_is_idle();
+        usec_t hb_dt = heartbeat_next(&hb, step);
+
+        if (unlikely(netdata_exit))
+            break;
+
+        worker_is_busy(0);
+        if(do_proc_net_dev(localhost->rrd_update_every, hb_dt))
+            break;
+    }
+
+    netdata_thread_cleanup_pop(1);
+    return NULL;
 }

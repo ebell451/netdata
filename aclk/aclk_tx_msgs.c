@@ -20,7 +20,7 @@ static void aclk_send_message_subtopic(mqtt_wss_client client, json_object *msg,
     const char *topic = aclk_get_topic(subtopic);
 
     if (unlikely(!topic)) {
-        error("Couldn't get topic. Aborting mesage send");
+        error("Couldn't get topic. Aborting message send");
         return;
     }
 
@@ -74,7 +74,7 @@ static uint16_t aclk_send_message_subtopic_pid(mqtt_wss_client client, json_obje
     const char *topic = aclk_get_topic(subtopic);
 
     if (unlikely(!topic)) {
-        error("Couldn't get topic. Aborting mesage send");
+        error("Couldn't get topic. Aborting message send");
         return 0;
     }
 
@@ -116,28 +116,30 @@ static void aclk_send_message_topic(mqtt_wss_client client, json_object *msg, co
 
 #define TOPIC_MAX_LEN 512
 #define V2_BIN_PAYLOAD_SEPARATOR "\x0D\x0A\x0D\x0A"
-static void aclk_send_message_with_bin_payload(mqtt_wss_client client, json_object *msg, const char *topic, const void *payload, size_t payload_len)
+static int aclk_send_message_with_bin_payload(mqtt_wss_client client, json_object *msg, const char *topic, const void *payload, size_t payload_len)
 {
     uint16_t packet_id;
     const char *str;
-    char *full_msg;
-    int len;
+    char *full_msg = NULL;
+    int len, rc;
 
     if (unlikely(!topic || topic[0] != '/')) {
         error ("Full topic required!");
-        return;
+        return 500;
     }
 
     str = json_object_to_json_string_ext(msg, JSON_C_TO_STRING_PLAIN);
     len = strlen(str);
 
-    full_msg = mallocz(len + strlen(V2_BIN_PAYLOAD_SEPARATOR) + payload_len);
+    if (payload_len) {
+        full_msg = mallocz(len + strlen(V2_BIN_PAYLOAD_SEPARATOR) + payload_len);
 
-    memcpy(full_msg, str, len);
-    memcpy(&full_msg[len], V2_BIN_PAYLOAD_SEPARATOR, strlen(V2_BIN_PAYLOAD_SEPARATOR));
-    len += strlen(V2_BIN_PAYLOAD_SEPARATOR);
-    memcpy(&full_msg[len], payload, payload_len);
-    len += payload_len;
+        memcpy(full_msg, str, len);
+        memcpy(&full_msg[len], V2_BIN_PAYLOAD_SEPARATOR, strlen(V2_BIN_PAYLOAD_SEPARATOR));
+        len += strlen(V2_BIN_PAYLOAD_SEPARATOR);
+        memcpy(&full_msg[len], payload, payload_len);
+        len += payload_len;
+    }
 
 /* TODO
 #ifdef ACLK_LOG_CONVERSATION_DIR
@@ -147,11 +149,22 @@ static void aclk_send_message_with_bin_payload(mqtt_wss_client client, json_obje
     json_object_to_file_ext(filename, msg, JSON_C_TO_STRING_PRETTY);
 #endif */
 
-    mqtt_wss_publish_pid(client, topic, full_msg, len,  MQTT_WSS_PUB_QOS1, &packet_id);
+    rc = mqtt_wss_publish_pid_block(client, topic, payload_len ? full_msg : str, len,  MQTT_WSS_PUB_QOS1, &packet_id, 5000);
+    if (rc == MQTT_WSS_ERR_BLOCK_TIMEOUT) {
+        error("Timeout sending binpacked message");
+        freez(full_msg);
+        return 503;
+    }
+    if (rc == MQTT_WSS_ERR_TX_BUF_TOO_SMALL) {
+        error("Message is bigger than allowed maximum");
+        freez(full_msg);
+        return 403;
+    }
 #ifdef NETDATA_INTERNAL_CHECKS
     aclk_stats_msg_published(packet_id);
 #endif
     freez(full_msg);
+    return 0;
 }
 
 /*
@@ -188,7 +201,7 @@ static struct json_object *create_hdr(const char *type, const char *msg_id, time
 
 // TODO handle this somehow on older json-c
 //    tmp = json_object_new_uint64(ts_us);
-// probably jso->_to_json_strinf -> custom function
+// probably jso->_to_json_string -> custom function
 //          jso->o.c_uint64 -> map this with pointer to signed int
 // commit that implements json_object_new_uint64 is 3c3b592
 // between 0.14 and 0.15
@@ -312,6 +325,25 @@ void aclk_send_alarm_metadata(mqtt_wss_client client, int metadata_submitted)
     buffer_free(local_buffer);
 }
 
+void aclk_http_msg_v2_err(mqtt_wss_client client, const char *topic, const char *msg_id, int http_code, int ec, const char* emsg, const char *payload, size_t payload_len)
+{
+    json_object *tmp, *msg;
+    msg = create_hdr("http", msg_id, 0, 0, 2);
+    tmp = json_object_new_int(http_code);
+    json_object_object_add(msg, "http-code", tmp);
+
+    tmp = json_object_new_int(ec);
+    json_object_object_add(msg, "error-code", tmp);
+
+    tmp = json_object_new_string(emsg);
+    json_object_object_add(msg, "error-description", tmp);
+
+    if (aclk_send_message_with_bin_payload(client, msg, topic, payload, payload_len)) {
+        error("Failed to send cancelation message for http reply");
+    }
+    json_object_put(msg);
+}
+
 void aclk_http_msg_v2(mqtt_wss_client client, const char *topic, const char *msg_id, usec_t t_exec, usec_t created, int http_code, const char *payload, size_t payload_len)
 {
     json_object *tmp, *msg;
@@ -327,8 +359,20 @@ void aclk_http_msg_v2(mqtt_wss_client client, const char *topic, const char *msg
     tmp = json_object_new_int(http_code);
     json_object_object_add(msg, "http-code", tmp);
 
-    aclk_send_message_with_bin_payload(client, msg, topic, payload, payload_len);
+    int rc = aclk_send_message_with_bin_payload(client, msg, topic, payload, payload_len);
     json_object_put(msg);
+
+    switch (rc) {
+    case 403:
+        aclk_http_msg_v2_err(client, topic, msg_id, rc, CLOUD_EC_REQ_REPLY_TOO_BIG, CLOUD_EMSG_REQ_REPLY_TOO_BIG, payload, payload_len);
+        break;
+    case 500:
+        aclk_http_msg_v2_err(client, topic, msg_id, rc, CLOUD_EC_FAIL_TOPIC, CLOUD_EMSG_FAIL_TOPIC, payload, payload_len);
+        break;
+    case 503:
+        aclk_http_msg_v2_err(client, topic, msg_id, rc, CLOUD_EC_SND_TIMEOUT, CLOUD_EMSG_SND_TIMEOUT, payload, payload_len);
+        break;
+    }
 }
 
 void aclk_chart_msg(mqtt_wss_client client, RRDHOST *host, const char *chart)
@@ -408,10 +452,22 @@ int aclk_send_app_layer_disconnect(mqtt_wss_client client, const char *message)
 uint16_t aclk_send_agent_connection_update(mqtt_wss_client client, int reachable) {
     size_t len;
     uint16_t pid;
+
+    struct capability agent_capabilities[] = {
+        { .name = "json",  .version = 2, .enabled = 0 },
+        { .name = "proto", .version = 1, .enabled = 1 },
+#ifdef ENABLE_ML
+        { .name = "ml",    .version = 1, .enabled = ml_enabled(localhost) },
+#endif
+        { .name = "mc",    .version = enable_metric_correlations ? metric_correlations_version : 0, .enabled = enable_metric_correlations },
+        { .name = NULL,    .version = 0, .enabled = 0 }
+    };
+
     update_agent_connection_t conn = {
         .reachable = (reachable ? 1 : 0),
         .lwt = 0,
-        .session_id = aclk_session_newarch
+        .session_id = aclk_session_newarch,
+        .capabilities = agent_capabilities
     };
 
     rrdhost_aclk_state_lock(localhost);
@@ -420,7 +476,10 @@ uint16_t aclk_send_agent_connection_update(mqtt_wss_client client, int reachable
         rrdhost_aclk_state_unlock(localhost);
         return 0;
     }
-    conn.claim_id = localhost->aclk_state.claimed_id;
+    if (localhost->aclk_state.prev_claimed_id)
+        conn.claim_id = localhost->aclk_state.prev_claimed_id;
+    else
+        conn.claim_id = localhost->aclk_state.claimed_id;
 
     char *msg = generate_update_agent_connection(&len, &conn);
     rrdhost_aclk_state_unlock(localhost);
@@ -432,6 +491,10 @@ uint16_t aclk_send_agent_connection_update(mqtt_wss_client client, int reachable
 
     pid = aclk_send_bin_message_subtopic_pid(client, msg, len, ACLK_TOPICID_AGENT_CONN, "UpdateAgentConnection");
     freez(msg);
+    if (localhost->aclk_state.prev_claimed_id) {
+        freez(localhost->aclk_state.prev_claimed_id);
+        localhost->aclk_state.prev_claimed_id = NULL;
+    }
     return pid;
 }
 
@@ -439,7 +502,8 @@ char *aclk_generate_lwt(size_t *size) {
     update_agent_connection_t conn = {
         .reachable = 0,
         .lwt = 1,
-        .session_id = aclk_session_newarch
+        .session_id = aclk_session_newarch,
+        .capabilities = NULL
     };
 
     rrdhost_aclk_state_lock(localhost);

@@ -53,6 +53,7 @@ extern "C" {
 
 #include <pthread.h>
 #include <errno.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -89,6 +90,12 @@ extern "C" {
 #include <spawn.h>
 #include <uv.h>
 #include <assert.h>
+
+// CentOS 7 has older version that doesn't define this
+// same goes for MacOS
+#ifndef UUID_STR_LEN
+#define UUID_STR_LEN (37)
+#endif
 
 #ifdef HAVE_NETINET_IN_H
 #include <netinet/in.h>
@@ -161,14 +168,6 @@ extern "C" {
 // ----------------------------------------------------------------------------
 // netdata common definitions
 
-#if (SIZEOF_VOID_P == 8)
-#define ENVIRONMENT64
-#elif (SIZEOF_VOID_P == 4)
-#define ENVIRONMENT32
-#else
-#error "Cannot detect if this is a 32 or 64 bit CPU"
-#endif
-
 #ifdef __GNUC__
 #define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
 #endif // __GNUC__
@@ -234,12 +233,15 @@ extern __thread size_t log_thread_memory_allocations;
 #define mallocz(size) mallocz_int(__FILE__, __FUNCTION__, __LINE__, size)
 #define reallocz(ptr, size) reallocz_int(__FILE__, __FUNCTION__, __LINE__, ptr, size)
 #define freez(ptr) freez_int(__FILE__, __FUNCTION__, __LINE__, ptr)
+#define log_allocations() log_allocations_int(__FILE__, __FUNCTION__, __LINE__)
 
 extern char *strdupz_int(const char *file, const char *function, const unsigned long line, const char *s);
 extern void *callocz_int(const char *file, const char *function, const unsigned long line, size_t nmemb, size_t size);
 extern void *mallocz_int(const char *file, const char *function, const unsigned long line, size_t size);
 extern void *reallocz_int(const char *file, const char *function, const unsigned long line, void *ptr, size_t size);
 extern void freez_int(const char *file, const char *function, const unsigned long line, void *ptr);
+extern void log_allocations_int(const char *file, const char *function, const unsigned long line);
+
 #else // NETDATA_LOG_ALLOCATIONS
 extern char *strdupz(const char *s) MALLOCLIKE NEVERNULL;
 extern void *callocz(size_t nmemb, size_t size) MALLOCLIKE NEVERNULL;
@@ -251,7 +253,7 @@ extern void freez(void *ptr);
 extern void json_escape_string(char *dst, const char *src, size_t size);
 extern void json_fix_string(char *s);
 
-extern void *mymmap(const char *filename, size_t size, int flags, int ksm);
+extern void *netdata_mmap(const char *filename, size_t size, int flags, int ksm);
 extern int memory_file_save(const char *filename, void *mem, size_t size);
 
 extern int fd_is_valid(int fd);
@@ -267,7 +269,6 @@ extern int verify_netdata_host_prefix();
 extern int recursively_delete_dir(const char *path, const char *reason);
 
 extern volatile sig_atomic_t netdata_exit;
-extern const char *os_type;
 
 extern const char *program_version;
 
@@ -296,8 +297,20 @@ extern char *find_and_replace(const char *src, const char *find, const char *rep
 #define KILOBITS_IN_A_MEGABIT 1000
 
 /* misc. */
+
 #define UNUSED(x) (void)(x)
+
+#ifdef __GNUC__
+#define UNUSED_FUNCTION(x) __attribute__((unused)) UNUSED_##x
+#else
+#define UNUSED_FUNCTION(x) UNUSED_##x
+#endif
+
 #define error_report(x, args...) do { errno = 0; error(x, ##args); } while(0)
+
+// Taken from linux kernel
+#define BUILD_BUG_ON(condition) ((void)sizeof(char[1 - 2*!!(condition)]))
+
 
 extern void netdata_cleanup_and_exit(int ret) NORETURN;
 extern void send_statistics(const char *action, const char *action_result, const char *action_data);
@@ -311,6 +324,7 @@ extern char *netdata_configured_host_prefix;
 #include "avl/avl.h"
 #include "inlined.h"
 #include "clocks/clocks.h"
+#include "completion/completion.h"
 #include "popen/popen.h"
 #include "simple_pattern/simple_pattern.h"
 #ifdef ENABLE_HTTPS
@@ -331,6 +345,8 @@ extern char *netdata_configured_host_prefix;
 #include "json/json.h"
 #include "health/health.h"
 #include "string/utf8.h"
+#include "onewayalloc/onewayalloc.h"
+#include "worker_utilization/worker_utilization.h"
 
 // BEWARE: Outside of the C code this also exists in alarm-notify.sh
 #define DEFAULT_CLOUD_BASE_URL "https://app.netdata.cloud"

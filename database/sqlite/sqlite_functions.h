@@ -16,6 +16,13 @@ struct node_instance_list {
     int hops;
 };
 
+typedef enum db_check_action_type {
+    DB_CHECK_NONE  = 0x0000,
+    DB_CHECK_INTEGRITY  = 0x0001,
+    DB_CHECK_FIX_DB = 0x0002,
+    DB_CHECK_RECLAIM_SPACE = 0x0004,
+    DB_CHECK_CONT = 0x00008
+} db_check_action_type_t;
 
 #define SQLITE_INSERT_DELAY (50)        // Insert delay in case of lock
 
@@ -49,7 +56,7 @@ struct node_instance_list {
         return 1;                                                                                                      \
     }
 
-extern int sql_init_database(void);
+extern int sql_init_database(db_check_action_type_t rebuild, int memory);
 extern void sql_close_database(void);
 
 extern int sql_store_host(uuid_t *guid, const char *hostname, const char *registry_hostname, int update_every, const char *os, const char *timezone, const char *tags);
@@ -82,7 +89,7 @@ extern void db_unlock(void);
 extern void db_lock(void);
 extern void delete_dimension_uuid(uuid_t *dimension_uuid);
 extern void sql_store_chart_label(uuid_t *chart_uuid, int source_type, char *label, char *value);
-extern void sql_build_context_param_list(struct context_param **param_list, RRDHOST *host, char *context, char *chart);
+extern void sql_build_context_param_list(ONEWAYALLOC  *owa, struct context_param **param_list, RRDHOST *host, char *context, char *chart);
 extern void store_claim_id(uuid_t *host_id, uuid_t *claim_id);
 extern int update_node_id(uuid_t *host_id, uuid_t *node_id);
 extern int get_node_id(uuid_t *host_id, uuid_t *node_id);
@@ -91,4 +98,7 @@ extern void invalidate_node_instances(uuid_t *host_id, uuid_t *claim_id);
 extern struct node_instance_list *get_node_list(void);
 extern void sql_load_node_id(RRDHOST *host);
 extern void compute_chart_hash(RRDSET *st);
+extern int sql_set_dimension_option(uuid_t *dim_uuid, char *option);
+char *get_hostname_by_node_id(char *node_id);
+void free_temporary_host(RRDHOST *host);
 #endif //NETDATA_SQLITE_FUNCTIONS_H

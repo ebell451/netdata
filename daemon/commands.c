@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "common.h"
-#include "database/engine/rrdenginelib.h"
 
 static uv_thread_t thread;
 static uv_loop_t* loop;
@@ -388,6 +387,7 @@ static void pipe_write_cb(uv_write_t* req, int status)
 
     uv_close((uv_handle_t *)client, pipe_close_cb);
     --clients;
+    freez(client->data);
     info("Command Clients = %u\n", clients);
 }
 
@@ -401,6 +401,10 @@ static inline void add_string_to_command_reply(char *reply_string, unsigned *rep
     unsigned len;
 
     len = strlen(str);
+
+    if (MAX_COMMAND_LENGTH - 1 < len + *reply_string_size)
+        len = MAX_COMMAND_LENGTH - *reply_string_size - 1;
+
     strncpyz(reply_string + *reply_string_size, str, len);
     *reply_string_size += len;
 }
@@ -408,7 +412,7 @@ static inline void add_string_to_command_reply(char *reply_string, unsigned *rep
 static void send_command_reply(struct command_context *cmd_ctx, cmd_status_t status, char *message)
 {
     int ret;
-    char reply_string[MAX_COMMAND_LENGTH] = {'\0', };
+    char *reply_string = mallocz(MAX_COMMAND_LENGTH);
     char exit_status_string[MAX_EXIT_STATUS_LENGTH + 1] = {'\0', };
     unsigned reply_string_size = 0;
     uv_buf_t write_buf;
@@ -425,6 +429,7 @@ static void send_command_reply(struct command_context *cmd_ctx, cmd_status_t sta
     }
 
     cmd_ctx->write_req.data = client;
+    client->data = reply_string;
     write_buf.base = reply_string;
     write_buf.len = reply_string_size;
     ret = uv_write(&cmd_ctx->write_req, (uv_stream_t *)client, &write_buf, 1, pipe_write_cb);
@@ -640,7 +645,7 @@ static void command_thread(void *arg)
     command_thread_error = 0;
     command_thread_shutdown = 0;
     /* wake up initialization thread */
-    complete(&completion);
+    completion_mark_complete(&completion);
 
     while (command_thread_shutdown == 0) {
         uv_run(loop, UV_RUN_DEFAULT);
@@ -669,7 +674,7 @@ error_after_loop_init:
     freez(loop);
 
     /* wake up initialization thread */
-    complete(&completion);
+    completion_mark_complete(&completion);
 }
 
 static void sanity_check(void)
@@ -693,15 +698,15 @@ void commands_init(void)
     }
     fatal_assert(0 == uv_rwlock_init(&exclusive_rwlock));
 
-    init_completion(&completion);
+    completion_init(&completion);
     error = uv_thread_create(&thread, command_thread, NULL);
     if (error) {
         error("uv_thread_create(): %s", uv_strerror(error));
         goto after_error;
     }
     /* wait for worker thread to initialize */
-    wait_for_completion(&completion);
-    destroy_completion(&completion);
+    completion_wait_for(&completion);
+    completion_destroy(&completion);
     uv_thread_set_name_np(thread, "DAEMON_COMMAND");
 
     if (command_thread_error) {

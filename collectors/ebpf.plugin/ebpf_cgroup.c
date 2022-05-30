@@ -242,7 +242,7 @@ static ebpf_cgroup_target_t * ebpf_cgroup_find_or_create(netdata_ebpf_cgroup_shm
  */
 static void ebpf_update_pid_link_list(ebpf_cgroup_target_t *ect, char *path)
 {
-    procfile *ff = procfile_open(path, " \t:", PROCFILE_FLAG_DEFAULT);
+    procfile *ff = procfile_open_no_log(path, " \t:", PROCFILE_FLAG_DEFAULT);
     if (!ff)
         return;
 
@@ -332,12 +332,14 @@ void ebpf_parse_cgroup_shm_data()
  * @param algorithm the algorithm used by dimension
  * @param context   add context for chart
  * @param module    chart module name, this is the eBPF thread.
+ * @param update_every value to overwrite the update frequency set by the server.
  */
 void ebpf_create_charts_on_systemd(char *id, char *title, char *units, char *family, char *charttype, int order,
-                                   char *algorithm, char *context, char *module)
+                                   char *algorithm, char *context, char *module, int update_every)
 {
     ebpf_cgroup_target_t *w;
-    ebpf_write_chart_cmd(NETDATA_SERVICE_FAMILY, id, title, units, family, charttype, context, order, module);
+    ebpf_write_chart_cmd(NETDATA_SERVICE_FAMILY, id, title, units, family, charttype, context,
+                         order, update_every, module);
 
     for (w = ebpf_cgroup_pids; w; w = w->next) {
         if (unlikely(w->systemd) && unlikely(w->updated))

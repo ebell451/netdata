@@ -6,7 +6,7 @@
 
 void generate_metadata_logfile_path(struct metadata_logfile *metalogfile, char *str, size_t maxlen)
 {
-    (void) snprintf(str, maxlen, "%s/" METALOG_PREFIX METALOG_FILE_NUMBER_PRINT_TMPL METALOG_EXTENSION,
+    (void) snprintfz(str, maxlen, "%s/" METALOG_PREFIX METALOG_FILE_NUMBER_PRINT_TMPL METALOG_EXTENSION,
                     metalogfile->ctx->rrdeng_ctx->dbfiles_path, metalogfile->starting_fileno, metalogfile->fileno);
 }
 
@@ -375,19 +375,15 @@ static int scan_metalog_files(struct metalog_instance *ctx)
     struct metalog_pluginsd_state metalog_parser_state;
     metalog_pluginsd_state_init(&metalog_parser_state, ctx);
 
-    PARSER_USER_OBJECT metalog_parser_object;
-    metalog_parser_object.enabled = cd.enabled;
-    metalog_parser_object.host = ctx->rrdeng_ctx->host;
-    metalog_parser_object.cd = &cd;
-    metalog_parser_object.trust_durations = 0;
-    metalog_parser_object.private = &metalog_parser_state;
+    PARSER_USER_OBJECT metalog_parser_object = {
+        .enabled = cd.enabled,
+        .host = ctx->rrdeng_ctx->host,
+        .cd = &cd,
+        .trust_durations = 0,
+        .private = &metalog_parser_state
+    };
 
     PARSER *parser = parser_init(metalog_parser_object.host, &metalog_parser_object, NULL, PARSER_INPUT_SPLIT);
-    if (unlikely(!parser)) {
-        error("Failed to initialize metadata log parser.");
-        failed_to_load = matched_files;
-        goto after_failed_to_parse;
-    }
     parser_add_keyword(parser, PLUGINSD_KEYWORD_HOST, metalog_pluginsd_host);
     parser_add_keyword(parser, PLUGINSD_KEYWORD_GUID, pluginsd_guid);
     parser_add_keyword(parser, PLUGINSD_KEYWORD_CONTEXT, pluginsd_context);
@@ -428,10 +424,8 @@ static int scan_metalog_files(struct metalog_instance *ctx)
     size_t count __maybe_unused = metalog_parser_object.count;
 
     debug(D_METADATALOG, "Parsing count=%u", (unsigned)count);
-after_failed_to_parse:
 
     freez(metalogfiles);
-
     return matched_files;
 }
 

@@ -5,17 +5,6 @@
 
 #include "daemon/common.h"
 
-#define NETDATA_PLUGIN_HOOK_HEALTH \
-    { \
-        .name = "HEALTH", \
-        .config_section = NULL, \
-        .config_name = NULL, \
-        .enabled = 1, \
-        .thread = NULL, \
-        .init_routine = NULL, \
-        .start_routine = health_main \
-    },
-
 extern unsigned int default_health_enabled;
 
 #define HEALTH_ENTRY_FLAG_PROCESSED             0x00000001
@@ -43,7 +32,6 @@ extern unsigned int default_health_enabled;
 extern char *silencers_filename;
 
 extern void health_init(void);
-extern void *health_main(void *ptr);
 
 extern void health_reload(void);
 
@@ -99,6 +87,7 @@ extern void *health_cmdapi_thread(void *ptr);
 extern void health_label_log_save(RRDHOST *host);
 
 extern char *health_edit_command_from_source(const char *source);
+extern void sql_refresh_hashes(void);
 
 extern SIMPLE_PATTERN *health_pattern_from_foreach(char *s);
 

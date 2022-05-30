@@ -125,7 +125,7 @@ char *rrdset_strncpyz_name(char *to, const char *from, size_t length) {
     char c, *p = to;
 
     while (length-- && (c = *from++)) {
-        if(c != '.' && !isalnum(c))
+        if(c != '.' && c != '-' && !isalnum(c))
             c = '_';
 
         *p++ = c;
@@ -144,25 +144,38 @@ int rrdset_set_name(RRDSET *st, const char *name) {
 
     debug(D_RRD_CALLS, "rrdset_set_name() old: '%s', new: '%s'", st->name?st->name:"", name);
 
-    char b[CONFIG_MAX_VALUE + 1];
-    char n[RRD_ID_LENGTH_MAX + 1];
+    char full_name[RRD_ID_LENGTH_MAX + 1];
+    char sanitized_name[CONFIG_MAX_VALUE + 1];
+    char new_name[CONFIG_MAX_VALUE + 1];
 
-    snprintfz(n, RRD_ID_LENGTH_MAX, "%s.%s", st->type, name);
-    rrdset_strncpyz_name(b, n, CONFIG_MAX_VALUE);
+    snprintfz(full_name, RRD_ID_LENGTH_MAX, "%s.%s", st->type, name);
+    rrdset_strncpyz_name(sanitized_name, full_name, CONFIG_MAX_VALUE);
+    strncpyz(new_name, sanitized_name, CONFIG_MAX_VALUE);
 
-    if(rrdset_index_find_name(host, b, 0)) {
-        info("RRDSET: chart name '%s' on host '%s' already exists.", b, host->hostname);
-        return 0;
+    if(rrdset_index_find_name(host, new_name, 0)) {
+        debug(D_RRD_CALLS, "RRDSET: chart name '%s' on host '%s' already exists.", new_name, host->hostname);
+        if(!strcmp(st->id, full_name) && !st->name) {
+            unsigned i = 1;
+
+            do {
+                snprintfz(new_name, CONFIG_MAX_VALUE, "%s_%u", sanitized_name, i);
+                i++;
+            } while (rrdset_index_find_name(host, new_name, 0));
+
+            info("RRDSET: using name '%s' for chart '%s' on host '%s'.", new_name, full_name, host->hostname);
+        } else {
+            return 0;
+        }
     }
 
     if(st->name) {
         rrdset_index_del_name(host, st);
-        st->name = config_set_default(st->config_section, "name", b);
+        st->name = strdupz(new_name);
         st->hash_name = simple_hash(st->name);
         rrdsetvar_rename_all(st);
     }
     else {
-        st->name = config_get(st->config_section, "name", b);
+        st->name = strdupz(new_name);
         st->hash_name = simple_hash(st->name);
     }
 
@@ -177,8 +190,6 @@ int rrdset_set_name(RRDSET *st, const char *name) {
 
     rrdset_flag_clear(st, RRDSET_FLAG_EXPORTING_SEND);
     rrdset_flag_clear(st, RRDSET_FLAG_EXPORTING_IGNORE);
-    rrdset_flag_clear(st, RRDSET_FLAG_BACKEND_SEND);
-    rrdset_flag_clear(st, RRDSET_FLAG_BACKEND_IGNORE);
     rrdset_flag_clear(st, RRDSET_FLAG_UPSTREAM_SEND);
     rrdset_flag_clear(st, RRDSET_FLAG_UPSTREAM_IGNORE);
     rrdset_flag_clear(st, RRDSET_FLAG_UPSTREAM_EXPOSED);
@@ -355,11 +366,6 @@ void rrdset_free(RRDSET *st) {
     rrdvar_free_remaining_variables(host, &st->rrdvar_root_index);
 
     // ------------------------------------------------------------------------
-    // remove it from the configuration
-
-    appconfig_section_destroy_non_loaded(&netdata_config, st->config_section);
-
-    // ------------------------------------------------------------------------
     // unlink it from the host
 
     if(st == host->rrdset_root) {
@@ -384,10 +390,17 @@ void rrdset_free(RRDSET *st) {
     netdata_rwlock_destroy(&st->state->labels.labels_rwlock);
 
     // free directly allocated members
-    freez(st->config_section);
+    freez((void *)st->name);
+    freez(st->type);
+    freez(st->family);
+    freez(st->title);
+    freez(st->units);
+    freez(st->context);
+    freez(st->cache_dir);
     freez(st->plugin_name);
     freez(st->module_name);
     freez(st->state->old_title);
+    freez(st->state->old_units);
     freez(st->state->old_context);
     free_label_list(st->state->labels.head);
     freez(st->state);
@@ -539,6 +552,10 @@ RRDSET *rrdset_create_custom(
         return NULL;
     }
 
+    if (host != localhost) {
+        host->senders_last_chart_command = now_realtime_sec();
+    }
+
     // ------------------------------------------------------------------------
     // check if it already exists
 
@@ -549,15 +566,13 @@ RRDSET *rrdset_create_custom(
     RRDSET *st = rrdset_find_on_create(host, fullid);
     if (st) {
         int mark_rebuild = 0;
-        rrdset_flag_set(st, RRDSET_FLAG_SYNC_CLOCK);
-        rrdset_flag_clear(st, RRDSET_FLAG_UPSTREAM_EXPOSED);
         if (rrdset_flag_check(st, RRDSET_FLAG_ARCHIVED)) {
             rrdset_flag_clear(st, RRDSET_FLAG_ARCHIVED);
             changed_from_archived_to_active = 1;
             mark_rebuild |= META_CHART_ACTIVATED;
         }
         char *old_plugin = NULL, *old_module = NULL, *old_title = NULL, *old_context = NULL,
-             *old_title_v = NULL, *old_context_v = NULL;
+             *old_title_v = NULL, *old_context_v = NULL, *old_units_v = NULL, *old_units = NULL;
         int rc;
 
         if(unlikely(name))
@@ -617,10 +632,19 @@ RRDSET *rrdset_create_custom(
             mark_rebuild |= META_CHART_UPDATED;
         }
 
-        RRDSET_TYPE new_chart_type =
-            rrdset_type_id(config_get(st->config_section, "chart type", rrdset_type_name(chart_type)));
-        if (st->chart_type != new_chart_type) {
-            st->chart_type = new_chart_type;
+        if (unlikely(units && st->state->old_units && strcmp(st->state->old_units, units))) {
+            char *new_units = strdupz(units);
+            old_units_v = st->state->old_units;
+            st->state->old_units = strdupz(units);
+            json_fix_string(new_units);
+            old_units= st->units;
+            st->units = new_units;
+            mark_rebuild |= META_CHART_UPDATED;
+        }
+
+
+        if (st->chart_type != chart_type) {
+            st->chart_type = chart_type;
             mark_rebuild |= META_CHART_UPDATED;
         }
 
@@ -655,8 +679,10 @@ RRDSET *rrdset_create_custom(
             freez(old_plugin);
             freez(old_module);
             freez(old_title);
+            freez(old_units);
             freez(old_context);
             freez(old_title_v);
+            freez(old_units_v);
             freez(old_context_v);
             if (mark_rebuild != META_CHART_ACTIVATED) {
                 info("Collector updated metadata for chart %s", st->id);
@@ -668,6 +694,11 @@ RRDSET *rrdset_create_custom(
             int rc = update_chart_metadata(st->chart_uuid, st, id, name);
             if (unlikely(rc))
                 error_report("Failed to update chart metadata in the database");
+
+            if (!changed_from_archived_to_active) {
+                rrdset_flag_set(st, RRDSET_FLAG_SYNC_CLOCK);
+                rrdset_flag_clear(st, RRDSET_FLAG_UPSTREAM_EXPOSED);
+            }
         }
         /* Fall-through during switch from archived to active so that the host lock is taken and health is linked */
         if (!changed_from_archived_to_active)
@@ -697,34 +728,14 @@ RRDSET *rrdset_create_custom(
     char fullfilename[FILENAME_MAX + 1];
 
     // ------------------------------------------------------------------------
-    // compose the config_section for this chart
-
-    char config_section[RRD_ID_LENGTH_MAX + GUID_LEN + 2];
-    if(host == localhost)
-        strcpy(config_section, fullid);
-    else
-        snprintfz(config_section, RRD_ID_LENGTH_MAX + GUID_LEN + 1, "%s/%s", host->machine_guid, fullid);
-
-    // ------------------------------------------------------------------------
     // get the options from the config, we need to create it
 
-    long entries;
-    if(memory_mode == RRD_MEMORY_MODE_DBENGINE) {
-        // only sets it the first time
-        entries = config_get_number(config_section, "history", 5);
-    } else {
-        long rentries = config_get_number(config_section, "history", history_entries);
-        entries = align_entries_to_pagesize(memory_mode, rentries);
-        if (entries != rentries) entries = config_set_number(config_section, "history", entries);
-
-        if (memory_mode == RRD_MEMORY_MODE_NONE && entries != rentries)
-            entries = config_set_number(config_section, "history", 10);
-    }
-    int enabled = config_get_boolean(config_section, "enabled", 1);
-    if(!enabled) entries = 5;
+    long entries = 5;
+    if (memory_mode != RRD_MEMORY_MODE_DBENGINE)
+        entries = align_entries_to_pagesize(memory_mode, history_entries);
 
     unsigned long size = sizeof(RRDSET);
-    char *cache_dir = rrdset_cache_dir(host, fullid, config_section);
+    char *cache_dir = rrdset_cache_dir(host, fullid);
 
     time_t now = now_realtime_sec();
 
@@ -736,12 +747,11 @@ RRDSET *rrdset_create_custom(
     snprintfz(fullfilename, FILENAME_MAX, "%s/main.db", cache_dir);
     if(memory_mode == RRD_MEMORY_MODE_SAVE || memory_mode == RRD_MEMORY_MODE_MAP ||
        memory_mode == RRD_MEMORY_MODE_RAM) {
-        st = (RRDSET *) mymmap(
-                  (memory_mode == RRD_MEMORY_MODE_RAM) ? NULL : fullfilename
-                , size
-                , ((memory_mode == RRD_MEMORY_MODE_MAP) ? MAP_SHARED : MAP_PRIVATE)
-                , 0
-        );
+        st = (RRDSET *)netdata_mmap(
+            (memory_mode == RRD_MEMORY_MODE_RAM) ? NULL : fullfilename,
+            size,
+            ((memory_mode == RRD_MEMORY_MODE_MAP) ? MAP_SHARED : MAP_PRIVATE),
+            0);
 
         if(st) {
             memset(&st->avl, 0, sizeof(avl_t));
@@ -751,7 +761,6 @@ RRDSET *rrdset_create_custom(
             memset(&st->rrdset_rwlock, 0, sizeof(netdata_rwlock_t));
 
             st->name = NULL;
-            st->config_section = NULL;
             st->type = NULL;
             st->family = NULL;
             st->title = NULL;
@@ -824,7 +833,6 @@ RRDSET *rrdset_create_custom(
     st->plugin_name = plugin?strdupz(plugin):NULL;
     st->module_name = module?strdupz(module):NULL;
 
-    st->config_section = strdupz(config_section);
     st->rrdhost = host;
     st->memsize = size;
     st->entries = entries;
@@ -840,44 +848,28 @@ RRDSET *rrdset_create_custom(
 
     st->cache_dir = cache_dir;
 
-    st->chart_type = rrdset_type_id(config_get(st->config_section, "chart type", rrdset_type_name(chart_type)));
-    st->type       = config_get(st->config_section, "type", type);
+    st->chart_type = chart_type;
+    st->type       = strdupz(type);
 
     st->state = callocz(1, sizeof(*st->state));
-    st->family     = config_get(st->config_section, "family", family?family:st->type);
+
+    st->family = family ? strdupz(family) : strdupz(st->type);
     json_fix_string(st->family);
 
-    st->units      = config_get(st->config_section, "units", units?units:"");
+    st->state->is_ar_chart = strcmp(st->id, ML_ANOMALY_RATES_CHART_ID) == 0;
+
+    st->units = units ? strdupz(units) : strdupz("");
+    st->state->old_units = strdupz(st->units);
     json_fix_string(st->units);
 
-    st->context    = config_get(st->config_section, "context", context?context:st->id);
+    st->context = context ? strdupz(context) : strdupz(st->id);
     st->state->old_context = strdupz(st->context);
     json_fix_string(st->context);
     st->hash_context = simple_hash(st->context);
 
-    st->priority = config_get_number(st->config_section, "priority", priority);
-    if(enabled)
-        rrdset_flag_set(st, RRDSET_FLAG_ENABLED);
-    else
-        rrdset_flag_clear(st, RRDSET_FLAG_ENABLED);
+    st->priority = priority;
 
-    rrdset_flag_clear(st, RRDSET_FLAG_DETAIL);
-    rrdset_flag_clear(st, RRDSET_FLAG_DEBUG);
-    rrdset_flag_clear(st, RRDSET_FLAG_OBSOLETE);
-    rrdset_flag_clear(st, RRDSET_FLAG_EXPORTING_SEND);
-    rrdset_flag_clear(st, RRDSET_FLAG_EXPORTING_IGNORE);
-    rrdset_flag_clear(st, RRDSET_FLAG_BACKEND_SEND);
-    rrdset_flag_clear(st, RRDSET_FLAG_BACKEND_IGNORE);
-    rrdset_flag_clear(st, RRDSET_FLAG_UPSTREAM_SEND);
-    rrdset_flag_clear(st, RRDSET_FLAG_UPSTREAM_IGNORE);
-    rrdset_flag_clear(st, RRDSET_FLAG_UPSTREAM_EXPOSED);
     rrdset_flag_set(st, RRDSET_FLAG_SYNC_CLOCK);
-
-    // if(!strcmp(st->id, "disk_util.dm-0")) {
-    //     st->debug = 1;
-    //     error("enabled debugging for '%s'", st->id);
-    // }
-    // else error("not enabled debugging for '%s'", st->id);
 
     st->green = NAN;
     st->red = NAN;
@@ -905,7 +897,7 @@ RRDSET *rrdset_create_custom(
         // could not use the name, use the id
         rrdset_set_name(st, id);
 
-    st->title = config_get(st->config_section, "title", title);
+    st->title = strdupz(title);
     st->state->old_title = strdupz(st->title);
     json_fix_string(st->title);
 
@@ -951,7 +943,7 @@ RRDSET *rrdset_create_custom(
 // RRDSET - data collection iteration control
 
 inline void rrdset_next_usec_unfiltered(RRDSET *st, usec_t microseconds) {
-    if(unlikely(!st->last_collected_time.tv_sec || !microseconds || (rrdset_flag_check_noatomic(st, RRDSET_FLAG_SYNC_CLOCK)))) {
+    if(unlikely(!st->last_collected_time.tv_sec || !microseconds || (rrdset_flag_check(st, RRDSET_FLAG_SYNC_CLOCK)))) {
         // call the full next_usec() function
         rrdset_next_usec(st, microseconds);
         return;
@@ -969,7 +961,7 @@ inline void rrdset_next_usec(RRDSET *st, usec_t microseconds) {
     usec_t discarded = microseconds;
     #endif
 
-    if(unlikely(rrdset_flag_check_noatomic(st, RRDSET_FLAG_SYNC_CLOCK))) {
+    if(unlikely(rrdset_flag_check(st, RRDSET_FLAG_SYNC_CLOCK))) {
         // the chart needs to be re-synced to current time
         rrdset_flag_clear(st, RRDSET_FLAG_SYNC_CLOCK);
 
@@ -1001,7 +993,9 @@ inline void rrdset_next_usec(RRDSET *st, usec_t microseconds) {
 
         if(unlikely(since_last_usec < 0)) {
             // oops! the database is in the future
+            #ifdef NETDATA_INTERNAL_CHECKS
             info("RRD database for chart '%s' on host '%s' is %0.5" LONG_DOUBLE_MODIFIER " secs in the future (counter #%zu, update #%zu). Adjusting it to current time.", st->id, st->rrdhost->hostname, (LONG_DOUBLE)-since_last_usec / USEC_PER_SEC, st->counter, st->counter_done);
+            #endif
 
             st->last_collected_time.tv_sec  = now.tv_sec - st->update_every;
             st->last_collected_time.tv_usec = now.tv_usec;
@@ -1018,7 +1012,9 @@ inline void rrdset_next_usec(RRDSET *st, usec_t microseconds) {
         }
         else if(unlikely((usec_t)since_last_usec > (usec_t)(st->update_every * 5 * USEC_PER_SEC))) {
             // oops! the database is too far behind
+            #ifdef NETDATA_INTERNAL_CHECKS
             info("RRD database for chart '%s' on host '%s' is %0.5" LONG_DOUBLE_MODIFIER " secs in the past (counter #%zu, update #%zu). Adjusting it to current time.", st->id, st->rrdhost->hostname, (LONG_DOUBLE)since_last_usec / USEC_PER_SEC, st->counter, st->counter_done);
+            #endif
 
             microseconds = (usec_t)since_last_usec;
             #ifdef NETDATA_INTERNAL_CHECKS
@@ -1120,7 +1116,7 @@ static inline size_t rrdset_done_interpolate(
         , usec_t last_collect_ut
         , usec_t now_collect_ut
         , char store_this_entry
-        , uint32_t storage_flags
+        , uint32_t has_reset_value
 ) {
     RRDDIM *rd;
 
@@ -1134,6 +1130,11 @@ static inline size_t rrdset_done_interpolate(
 
     size_t counter = st->counter;
     long current_entry = st->current_entry;
+
+    uint32_t storage_flags = SN_DEFAULT_FLAGS;
+
+    if (has_reset_value)
+        storage_flags |= SN_EXISTS_RESET;
 
     for( ; next_store_ut <= now_collect_ut ; last_collect_ut = next_store_ut, next_store_ut += update_every_ut, iterations-- ) {
 
@@ -1232,13 +1233,22 @@ static inline size_t rrdset_done_interpolate(
             }
 
             if(unlikely(!store_this_entry)) {
-                rd->state->collect_ops.store_metric(rd, next_store_ut, SN_EMPTY_SLOT); //pack_storage_number(0, SN_NOT_EXISTS)
-//                rd->values[current_entry] = SN_EMPTY_SLOT; //pack_storage_number(0, SN_NOT_EXISTS);
+                (void) ml_is_anomalous(rd, 0, false);
+
+                rd->state->collect_ops.store_metric(rd, next_store_ut, SN_EMPTY_SLOT);
+//                rd->values[current_entry] = SN_EMPTY_SLOT;
                 continue;
             }
 
             if(likely(rd->updated && rd->collections_counter > 1 && iterations < st->gap_when_lost_iterations_above)) {
-                rd->state->collect_ops.store_metric(rd, next_store_ut, pack_storage_number(new_value, storage_flags));
+                uint32_t dim_storage_flags = storage_flags;
+
+                if (ml_is_anomalous(rd, new_value, true)) {
+                    // clear anomaly bit: 0 -> is anomalous, 1 -> not anomalous
+                    dim_storage_flags &= ~ ((uint32_t) SN_ANOMALY_BIT);
+                }
+
+                rd->state->collect_ops.store_metric(rd, next_store_ut, pack_storage_number(new_value, dim_storage_flags));
 //                rd->values[current_entry] = pack_storage_number(new_value, storage_flags );
                 rd->last_stored_value = new_value;
 
@@ -1250,9 +1260,9 @@ static inline size_t rrdset_done_interpolate(
                           , unpack_storage_number(rd->values[current_entry]), new_value
                 );
                 #endif
-
             }
             else {
+                (void) ml_is_anomalous(rd, 0, false);
 
                 #ifdef NETDATA_INTERNAL_CHECKS
                 rrdset_debug(st, "%s: STORE[%ld] = NON EXISTING "
@@ -1261,8 +1271,8 @@ static inline size_t rrdset_done_interpolate(
                 );
                 #endif
 
-//                rd->values[current_entry] = SN_EMPTY_SLOT; // pack_storage_number(0, SN_NOT_EXISTS);
-                rd->state->collect_ops.store_metric(rd, next_store_ut, SN_EMPTY_SLOT); //pack_storage_number(0, SN_NOT_EXISTS)
+//                rd->values[current_entry] = SN_EMPTY_SLOT;
+                rd->state->collect_ops.store_metric(rd, next_store_ut, SN_EMPTY_SLOT);
                 rd->last_stored_value = NAN;
             }
 
@@ -1274,11 +1284,10 @@ static inline size_t rrdset_done_interpolate(
                 calculated_number t2 = unpack_storage_number(rd->values[current_entry]);
 
                 calculated_number accuracy = accuracy_loss(t1, t2);
-                debug(D_RRD_STATS, "%s/%s: UNPACK[%ld] = " CALCULATED_NUMBER_FORMAT " FLAGS=0x%08x (original = " CALCULATED_NUMBER_FORMAT ", accuracy loss = " CALCULATED_NUMBER_FORMAT "%%%s)"
+                debug(D_RRD_STATS, "%s/%s: UNPACK[%ld] = " CALCULATED_NUMBER_FORMAT " (original = " CALCULATED_NUMBER_FORMAT ", accuracy loss = " CALCULATED_NUMBER_FORMAT "%%%s)"
                       , st->id, rd->name
                       , current_entry
                       , t2
-                      , get_storage_number_flags(rd->values[current_entry])
                       , t1
                       , accuracy
                       , (accuracy > ACCURACY_LOSS_ACCEPTED_PERCENT) ? " **TOO BIG** " : ""
@@ -1300,7 +1309,7 @@ static inline size_t rrdset_done_interpolate(
             #endif
         }
         // reset the storage flags for the next point, if any;
-        storage_flags = SN_EXISTS;
+        storage_flags = SN_DEFAULT_FLAGS;
 
         st->counter = ++counter;
         st->current_entry = current_entry = ((current_entry + 1) >= st->entries) ? 0 : current_entry + 1;
@@ -1349,6 +1358,7 @@ static inline void rrdset_done_fill_the_gap(RRDSET *st) {
         st->last_updated.tv_sec += c * st->update_every;
 
         st->current_entry += c;
+        st->counter += c;
         if(st->current_entry >= st->entries)
             st->current_entry -= st->entries;
     }
@@ -1378,19 +1388,13 @@ void rrdset_done(RRDSET *st) {
     rrdset_rdlock(st);
 
 #ifdef ENABLE_ACLK
-    #ifdef ENABLE_NEW_CLOUD_PROTOCOL
-    if (unlikely(!rrdset_flag_check(st, RRDSET_FLAG_ACLK))) {
-        if (st->counter_done >= RRDSET_MINIMUM_LIVE_COUNT) {
-            if (likely(!sql_queue_chart_to_aclk(st)))
+    if (likely(!st->state->is_ar_chart)) {
+        if (unlikely(!rrdset_flag_check(st, RRDSET_FLAG_ACLK))) {
+            if (likely(st->dimensions && st->counter_done && !queue_chart_to_aclk(st))) {
                 rrdset_flag_set(st, RRDSET_FLAG_ACLK);
+            }
         }
     }
-    #else
-    if (unlikely(!rrdset_flag_check(st, RRDSET_FLAG_ACLK))) {
-        rrdset_flag_set(st, RRDSET_FLAG_ACLK);
-        aclk_update_chart(st->rrdhost, st->id, 1);
-    }
-    #endif
 #endif
 
     if(unlikely(rrdset_flag_check(st, RRDSET_FLAG_OBSOLETE))) {
@@ -1446,7 +1450,14 @@ void rrdset_done(RRDSET *st) {
     // check if we will re-write the entire data set
     if(unlikely(dt_usec(&st->last_collected_time, &st->last_updated) > st->entries * update_every_ut &&
                 st->rrd_memory_mode != RRD_MEMORY_MODE_DBENGINE)) {
-        info("%s: too old data (last updated at %ld.%ld, last collected at %ld.%ld). Resetting it. Will not store the next entry.", st->name, st->last_updated.tv_sec, st->last_updated.tv_usec, st->last_collected_time.tv_sec, st->last_collected_time.tv_usec);
+        info(
+            "%s: too old data (last updated at %"PRId64".%"PRId64", last collected at %"PRId64".%"PRId64"). "
+            "Resetting it. Will not store the next entry.",
+            st->name,
+            (int64_t)st->last_updated.tv_sec,
+            (int64_t)st->last_updated.tv_usec,
+            (int64_t)st->last_collected_time.tv_sec,
+            (int64_t)st->last_collected_time.tv_usec);
         rrdset_reset(st);
         rrdset_init_last_updated_time(st);
 
@@ -1461,7 +1472,14 @@ void rrdset_done(RRDSET *st) {
     // check if we will re-write the entire page
     if(unlikely(st->rrd_memory_mode == RRD_MEMORY_MODE_DBENGINE &&
                 dt_usec(&st->last_collected_time, &st->last_updated) > (RRDENG_BLOCK_SIZE / sizeof(storage_number)) * update_every_ut)) {
-        info("%s: too old data (last updated at %ld.%ld, last collected at %ld.%ld). Resetting it. Will not store the next entry.", st->name, st->last_updated.tv_sec, st->last_updated.tv_usec, st->last_collected_time.tv_sec, st->last_collected_time.tv_usec);
+        info(
+            "%s: too old data (last updated at %" PRId64 ".%" PRId64 ", last collected at %" PRId64 ".%" PRId64 "). "
+            "Resetting it. Will not store the next entry.",
+            st->name,
+            (int64_t)st->last_updated.tv_sec,
+            (int64_t)st->last_updated.tv_usec,
+            (int64_t)st->last_collected_time.tv_sec,
+            (int64_t)st->last_collected_time.tv_usec);
         rrdset_reset(st);
         rrdset_init_last_updated_time(st);
 
@@ -1540,7 +1558,7 @@ after_first_database_work:
             st->collected_total += rd->collected_value;
     }
 
-    uint32_t storage_flags = SN_EXISTS;
+    uint32_t has_reset_value = 0;
 
     // process all dimensions to calculate their values
     // based on the collected figures only
@@ -1637,7 +1655,7 @@ after_first_database_work:
                           , rd->collected_value);
 
                     if(!(rrddim_flag_check(rd, RRDDIM_FLAG_DONT_DETECT_RESETS_OR_OVERFLOWS)))
-                        storage_flags = SN_EXISTS_RESET;
+                        has_reset_value = 1;
 
                     uint64_t last = (uint64_t)rd->last_collected_value;
                     uint64_t new = (uint64_t)rd->collected_value;
@@ -1708,7 +1726,7 @@ after_first_database_work:
                     );
 
                     if(!(rrddim_flag_check(rd, RRDDIM_FLAG_DONT_DETECT_RESETS_OR_OVERFLOWS)))
-                        storage_flags = SN_EXISTS_RESET;
+                        has_reset_value = 1;
 
                     rd->last_collected_value = rd->collected_value;
                 }
@@ -1787,27 +1805,23 @@ after_first_database_work:
             , last_collect_ut
             , now_collect_ut
             , store_this_entry
-            , storage_flags
+            , has_reset_value
     );
 
 after_second_database_work:
     st->last_collected_total  = st->collected_total;
 
-#ifdef ENABLE_NEW_CLOUD_PROTOCOL
+#if defined(ENABLE_ACLK) && defined(ENABLE_NEW_CLOUD_PROTOCOL)
     time_t mark = now_realtime_sec();
 #endif
     rrddim_foreach_read(rd, st) {
         if (rrddim_flag_check(rd, RRDDIM_FLAG_ARCHIVED))
             continue;
 
-#ifdef ENABLE_NEW_CLOUD_PROTOCOL
-        int live = ((mark - rd->last_collected_time.tv_sec) < (RRDSET_MINIMUM_LIVE_COUNT * rd->update_every));
-        if (unlikely(live != rd->state->aclk_live_status)) {
-            if (likely(rrdset_flag_check(st, RRDSET_FLAG_ACLK))) {
-                if (likely(!sql_queue_dimension_to_aclk(rd))) {
-                    rd->state->aclk_live_status = live;
-                }
-            }
+#if defined(ENABLE_ACLK) && defined(ENABLE_NEW_CLOUD_PROTOCOL)
+        if (likely(!st->state->is_ar_chart)) {
+            if (!rrddim_flag_check(rd, RRDDIM_FLAG_HIDDEN) && likely(rrdset_flag_check(st, RRDSET_FLAG_ACLK)))
+                queue_dimension_to_aclk(rd, calc_dimension_liveness(rd, mark));
         }
 #endif
         if(unlikely(!rd->updated))
@@ -1909,6 +1923,9 @@ after_second_database_work:
                             delete_dimension_uuid(&rd->state->metric_uuid);
                         } else {
                             /* Do not delete this dimension */
+#if defined(ENABLE_ACLK) && defined(ENABLE_NEW_CLOUD_PROTOCOL)
+                            queue_dimension_to_aclk(rd, calc_dimension_liveness(rd, mark));
+#endif
                             last = rd;
                             rd = rd->next;
                             continue;
@@ -2002,5 +2019,41 @@ struct label *rrdset_lookup_label_key(RRDSET *st, char *key, uint32_t key_hash)
         ret = label_list_lookup_key(labels->head, key, key_hash);
         netdata_rwlock_unlock(&labels->labels_rwlock);
     }
+    return ret;
+}
+
+static inline int k8s_space(char c) {
+    switch(c) {
+        case ':':
+        case ',':
+            return 1;
+        default:
+            return 0;
+    }
+}
+
+int rrdset_matches_label_keys(RRDSET *st, char *keylist, char *words[], uint32_t *hash_key_list, int *word_count, int size)
+{
+    struct label_index *labels = &st->state->labels;
+
+    if (!labels->head)
+        return 0;
+
+    struct label *one_label;
+
+    if (!*word_count) {
+        *word_count = quoted_strings_splitter(keylist, words, size, k8s_space, NULL, NULL, 0);
+        for (int i = 0; i < *word_count - 1; i += 2) {
+            hash_key_list[i] = simple_hash(words[i]);
+        }
+    }
+
+    int ret = 1;
+    netdata_rwlock_rdlock(&labels->labels_rwlock);
+    for (int i = 0; ret && i < *word_count - 1; i += 2) {
+        one_label = label_list_lookup_key(labels->head, words[i], hash_key_list[i]);
+        ret = (one_label && !strcmp(one_label->value, words[i + 1]));
+    }
+    netdata_rwlock_unlock(&labels->labels_rwlock);
     return ret;
 }

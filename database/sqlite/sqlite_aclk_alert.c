@@ -3,69 +3,169 @@
 #include "sqlite_functions.h"
 #include "sqlite_aclk_alert.h"
 
-#ifdef ENABLE_ACLK
+#ifdef ENABLE_NEW_CLOUD_PROTOCOL
 #include "../../aclk/aclk_alarm_api.h"
 #include "../../aclk/aclk.h"
 #endif
 
+time_t removed_when(uint32_t alarm_id, uint32_t before_unique_id, uint32_t after_unique_id, char *uuid_str) {
+    sqlite3_stmt *res = NULL;
+    int rc = 0;
+    time_t when = 0;
+    char sql[ACLK_SYNC_QUERY_SIZE];
+
+    snprintfz(sql,ACLK_SYNC_QUERY_SIZE-1, "select when_key from health_log_%s where alarm_id = %u " \
+                                          "and unique_id > %u and unique_id < %u " \
+                                          "and new_status = -2;", uuid_str, alarm_id, after_unique_id, before_unique_id);
+
+    rc = sqlite3_prepare_v2(db_meta, sql, -1, &res, 0);
+    if (rc != SQLITE_OK) {
+        error_report("Failed to prepare statement when trying to find removed gap.");
+        return 0;
+    }
+
+    rc = sqlite3_step(res);
+    if (likely(rc == SQLITE_ROW)) {
+        when = (time_t) sqlite3_column_int64(res, 0);
+    }
+
+    rc = sqlite3_finalize(res);
+    if (unlikely(rc != SQLITE_OK))
+        error_report("Failed to finalize statement when trying to find removed gap, rc = %d", rc);
+
+    return when;
+}
+
+#define MAX_REMOVED_PERIOD 900
+//decide if some events should be sent or not
+int should_send_to_cloud(RRDHOST *host, ALARM_ENTRY *ae)
+{
+    sqlite3_stmt *res = NULL;
+    char uuid_str[GUID_LEN + 1];
+    uuid_unparse_lower_fix(&host->host_uuid, uuid_str);
+    int send = 1, rc = 0;
+
+    if (ae->new_status == RRDCALC_STATUS_REMOVED || ae->new_status == RRDCALC_STATUS_UNINITIALIZED) {
+        return 0;
+    }
+
+    if (unlikely(uuid_is_null(ae->config_hash_id))) 
+        return 0;
+
+    char sql[ACLK_SYNC_QUERY_SIZE];
+    uuid_t config_hash_id;
+    RRDCALC_STATUS status;
+    uint32_t unique_id;
+    
+    //get the previous sent event of this alarm_id
+    snprintfz(sql,ACLK_SYNC_QUERY_SIZE-1, "select hl.new_status, hl.config_hash_id, hl.unique_id from health_log_%s hl, aclk_alert_%s aa \
+                         where hl.unique_id = aa.alert_unique_id        \
+                         and hl.alarm_id = %u and hl.unique_id <> %u \
+                         order by alarm_event_id desc LIMIT 1;", uuid_str, uuid_str, ae->alarm_id, ae->unique_id);
+
+    rc = sqlite3_prepare_v2(db_meta, sql, -1, &res, 0);
+    if (rc != SQLITE_OK) {
+        error_report("Failed to prepare statement when trying to filter alert events.");
+        send = 1;
+        return send;
+    }
+
+    rc = sqlite3_step(res);
+    if (likely(rc == SQLITE_ROW)) {
+        status  = (RRDCALC_STATUS) sqlite3_column_int(res, 0);
+        if (sqlite3_column_type(res, 1) != SQLITE_NULL)
+            uuid_copy(config_hash_id, *((uuid_t *) sqlite3_column_blob(res, 1)));
+        unique_id = (uint32_t) sqlite3_column_int64(res, 2);
+        
+    } else {
+        send = 1;
+        goto done;
+    }
+
+    if (ae->new_status != (RRDCALC_STATUS)status) {
+        send = 1;
+        goto done;
+    }
+
+    if (uuid_compare(ae->config_hash_id, config_hash_id)) {
+        send = 1;
+        goto done;
+    }
+
+    //same status, same config
+    if (ae->new_status == RRDCALC_STATUS_CLEAR) {
+        send = 0;
+        goto done;
+    }
+
+    //detect a long off period of the agent, TODO make global
+    if (ae->new_status == RRDCALC_STATUS_WARNING || ae->new_status == RRDCALC_STATUS_CRITICAL) {
+        time_t when = removed_when(ae->alarm_id, ae->unique_id, unique_id, uuid_str);
+
+        if (when && (when + (time_t)MAX_REMOVED_PERIOD) < ae->when) {
+            send = 1;
+            goto done;
+        } else {
+            send = 0;
+            goto done;
+        }
+    }
+     
+done:
+    rc = sqlite3_finalize(res);
+    if (unlikely(rc != SQLITE_OK))
+        error_report("Failed to finalize statement when trying to filter alert events, rc = %d", rc);
+
+    return send;
+}
+
 // will replace call to aclk_update_alarm in health/health_log.c
 // and handle both cases
-void sql_queue_alarm_to_aclk(RRDHOST *host, ALARM_ENTRY *ae)
+int sql_queue_alarm_to_aclk(RRDHOST *host, ALARM_ENTRY *ae, int skip_filter)
 {
     //check aclk architecture and handle old json alarm update to cloud
     //include also the valid statuses for this case
 #ifdef ENABLE_ACLK
-    if (!aclk_use_new_cloud_arch) {
+#ifdef ENABLE_NEW_CLOUD_PROTOCOL
+    if (!aclk_use_new_cloud_arch && aclk_connected) {
+#endif
+
         if ((ae->new_status == RRDCALC_STATUS_WARNING || ae->new_status == RRDCALC_STATUS_CRITICAL) ||
             ((ae->old_status == RRDCALC_STATUS_WARNING || ae->old_status == RRDCALC_STATUS_CRITICAL))) {
             aclk_update_alarm(host, ae);
         }
-        return;
+#endif
+#ifdef ENABLE_NEW_CLOUD_PROTOCOL
     }
 
-    if (ae->flags & HEALTH_ENTRY_FLAG_ACLK_QUEUED)
-        return;
+    if (!claimed())
+        return 0;
 
-    if (ae->new_status == RRDCALC_STATUS_REMOVED || ae->new_status == RRDCALC_STATUS_UNINITIALIZED)
-        return;
+    if (ae->flags & HEALTH_ENTRY_FLAG_ACLK_QUEUED) {
+        return 0;
+    }
 
-    if (unlikely(!host->dbsync_worker))
-        return;
+    if (!skip_filter) {
+        if (!should_send_to_cloud(host, ae)) {
+            return 0;
+        }
+    }
 
-    if (unlikely(uuid_is_null(ae->config_hash_id)))
-        return;
-
-    struct aclk_database_cmd cmd;
-    memset(&cmd, 0, sizeof(cmd));
-    cmd.opcode = ACLK_DATABASE_ADD_ALERT;
-    cmd.data = ae;
-    cmd.completion = NULL;
-    aclk_database_enq_cmd((struct aclk_database_worker_config *) host->dbsync_worker, &cmd);
-    ae->flags |= HEALTH_ENTRY_FLAG_ACLK_QUEUED;
-#else
-    UNUSED(host);
-    UNUSED(ae);
-#endif
-    return;
-}
-
-// stores an alert entry to aclk_alert_ table
-int aclk_add_alert_event(struct aclk_database_worker_config *wc, struct aclk_database_cmd cmd)
-{
     int rc = 0;
 
     CHECK_SQLITE_CONNECTION(db_meta);
 
     sqlite3_stmt *res_alert = NULL;
-    ALARM_ENTRY *ae = cmd.data;
+    char uuid_str[GUID_LEN + 1];
+    uuid_unparse_lower_fix(&host->host_uuid, uuid_str);
 
     BUFFER *sql = buffer_create(1024);
 
     buffer_sprintf(
         sql,
         "INSERT INTO aclk_alert_%s (alert_unique_id, date_created) "
-        "VALUES (@alert_unique_id, strftime('%%s')); ",
-        wc->uuid_str);
+        "VALUES (@alert_unique_id, strftime('%%s')) on conflict (alert_unique_id) do nothing; ",
+        uuid_str);
 
     rc = sqlite3_prepare_v2(db_meta, buffer_tostring(sql), -1, &res_alert, 0);
     if (unlikely(rc != SQLITE_OK)) {
@@ -79,20 +179,34 @@ int aclk_add_alert_event(struct aclk_database_worker_config *wc, struct aclk_dat
         goto bind_fail;
 
     rc = execute_insert(res_alert);
-    if (unlikely(rc != SQLITE_DONE))
+    if (unlikely(rc != SQLITE_DONE)) {
         error_report("Failed to store alert event %u, rc = %d", ae->unique_id, rc);
+        goto bind_fail;
+    }
+
+    ae->flags |= HEALTH_ENTRY_FLAG_ACLK_QUEUED;
+    struct aclk_database_worker_config *wc  = (struct aclk_database_worker_config *)host->dbsync_worker;
+    if (wc) {
+        wc->pause_alert_updates = 0;
+    }
 
 bind_fail:
     if (unlikely(sqlite3_finalize(res_alert) != SQLITE_OK))
         error_report("Failed to reset statement in store alert event, rc = %d", rc);
 
     buffer_free(sql);
-    return (rc != SQLITE_DONE);
+    return 0;
+#else
+    UNUSED(host);
+    UNUSED(ae);
+    UNUSED(skip_filter);
+#endif
+    return 0;
 }
 
 int rrdcalc_status_to_proto_enum(RRDCALC_STATUS status)
 {
-#ifdef ENABLE_ACLK
+#ifdef ENABLE_NEW_CLOUD_PROTOCOL
     switch(status) {
         case RRDCALC_STATUS_REMOVED:
             return ALARM_STATUS_REMOVED;
@@ -127,13 +241,18 @@ void aclk_push_alert_event(struct aclk_database_worker_config *wc, struct aclk_d
     int rc;
 
     if (unlikely(!wc->alert_updates)) {
-        debug(D_ACLK_SYNC,"Ignoring alert push event, updates have been turned off for node %s", wc->node_id);
+        log_access("ACLK STA [%s (%s)]: Ignoring alert push event, updates have been turned off for this node.", wc->node_id, wc->host ? wc->host->hostname : "N/A");
         return;
     }
 
     char *claim_id = is_agent_claimed();
     if (unlikely(!claim_id))
         return;
+
+    if (unlikely(!wc->host)) {
+        freez(claim_id);
+        return;
+    }
 
     BUFFER *sql = buffer_create(1024);
 
@@ -142,7 +261,11 @@ void aclk_push_alert_event(struct aclk_database_worker_config *wc, struct aclk_d
             sql,
             "UPDATE aclk_alert_%s SET date_submitted = NULL, date_cloud_ack = NULL WHERE sequence_id >= %"PRIu64
             "; UPDATE aclk_alert_%s SET date_cloud_ack = strftime('%%s','now') WHERE sequence_id < %"PRIu64
-            " and date_cloud_ack is null",
+            " and date_cloud_ack is null "
+            "; UPDATE aclk_alert_%s SET date_submitted = strftime('%%s','now') WHERE sequence_id < %"PRIu64
+            " and date_submitted is null",
+            wc->uuid_str,
+            wc->alerts_start_seq_id,
             wc->uuid_str,
             wc->alerts_start_seq_id,
             wc->uuid_str,
@@ -175,6 +298,8 @@ void aclk_push_alert_event(struct aclk_database_worker_config *wc, struct aclk_d
     char uuid_str[GUID_LEN + 1];
     uint64_t  first_sequence_id = 0;
     uint64_t  last_sequence_id = 0;
+    static __thread uint64_t log_first_sequence_id = 0;
+    static __thread uint64_t log_last_sequence_id = 0;
 
     while (sqlite3_step(res) == SQLITE_ROW) {
         struct alarm_log_entry alarm_log;
@@ -203,7 +328,7 @@ void aclk_push_alert_event(struct aclk_database_worker_config *wc, struct aclk_d
 
         char *edit_command = sqlite3_column_bytes(res, 16) > 0 ?
                                  health_edit_command_from_source((char *)sqlite3_column_text(res, 16)) :
-                                 strdupz("UNKNOWN=0");
+                                 strdupz("UNKNOWN=0=UNKNOWN");
         alarm_log.command = strdupz(edit_command);
 
         alarm_log.duration = (time_t) sqlite3_column_int64(res, 6);
@@ -236,13 +361,20 @@ void aclk_push_alert_event(struct aclk_database_worker_config *wc, struct aclk_d
         alarm_log.old_value = (calculated_number) sqlite3_column_double(res, 24);
 
         alarm_log.updated = (sqlite3_column_int64(res, 8) & HEALTH_ENTRY_FLAG_UPDATED) ? 1 : 0;
-        alarm_log.rendered_info = strdupz((char *)sqlite3_column_text(res, 18));
+        alarm_log.rendered_info = sqlite3_column_type(res, 18) == SQLITE_NULL ?
+                                      strdupz((char *)"") :
+                                      strdupz((char *)sqlite3_column_text(res, 18));
 
         aclk_send_alarm_log_entry(&alarm_log);
 
         if (first_sequence_id == 0)
             first_sequence_id  = (uint64_t) sqlite3_column_int64(res, 0);
+
+        if (log_first_sequence_id == 0)
+            log_first_sequence_id  = (uint64_t) sqlite3_column_int64(res, 0);
+
         last_sequence_id = (uint64_t) sqlite3_column_int64(res, 0);
+        log_last_sequence_id = (uint64_t) sqlite3_column_int64(res, 0);
 
         destroy_alarm_log_entry(&alarm_log);
         freez(edit_command);
@@ -254,6 +386,18 @@ void aclk_push_alert_event(struct aclk_database_worker_config *wc, struct aclk_d
                             "WHERE date_submitted IS NULL AND sequence_id BETWEEN %" PRIu64 " AND %" PRIu64 ";",
                        wc->uuid_str, first_sequence_id, last_sequence_id);
         db_execute(buffer_tostring(sql));
+    } else {
+        if (log_first_sequence_id)
+            log_access(
+                "ACLK RES [%s (%s)]: ALERTS SENT from %" PRIu64 " to %" PRIu64 " batch=%" PRIu64,
+                wc->node_id,
+                wc->host ? wc->host->hostname : "N/A",
+                log_first_sequence_id,
+                log_last_sequence_id,
+                wc->alerts_batch_id);
+        log_first_sequence_id = 0;
+        log_last_sequence_id = 0;
+        wc->pause_alert_updates = 1;
     }
 
     rc = sqlite3_finalize(res);
@@ -267,26 +411,58 @@ void aclk_push_alert_event(struct aclk_database_worker_config *wc, struct aclk_d
     return;
 }
 
+void sql_queue_existing_alerts_to_aclk(RRDHOST *host)
+{
+    char uuid_str[GUID_LEN + 1];
+    uuid_unparse_lower_fix(&host->host_uuid, uuid_str);
+    BUFFER *sql = buffer_create(1024);
+
+    buffer_sprintf(sql,"insert into aclk_alert_%s (alert_unique_id, date_created) " \
+                       "select unique_id alert_unique_id, strftime('%%s') date_created from health_log_%s " \
+                       "where new_status <> 0 and new_status <> -2 and config_hash_id is not null and updated_by_id = 0 " \
+                       "order by unique_id asc on conflict (alert_unique_id) do nothing;", uuid_str, uuid_str);
+
+    db_execute(buffer_tostring(sql));
+
+    buffer_free(sql);
+
+    struct aclk_database_worker_config *wc  = (struct aclk_database_worker_config *)host->dbsync_worker;
+    if (wc) {
+        wc->pause_alert_updates = 0;
+    }
+}
+
 void aclk_send_alarm_health_log(char *node_id)
 {
     if (unlikely(!node_id))
         return;
+
+    char *hostname= NULL;
 
     struct aclk_database_worker_config *wc  = NULL;
     struct aclk_database_cmd cmd;
     memset(&cmd, 0, sizeof(cmd));
     cmd.opcode = ACLK_DATABASE_ALARM_HEALTH_LOG;
 
-    rrd_wrlock();
+    rrd_rdlock();
     RRDHOST *host = find_host_by_node_id(node_id);
-    if (likely(host))
+    if (likely(host)) {
         wc = (struct aclk_database_worker_config *)host->dbsync_worker;
+        hostname = host->hostname;
+    }
+    else
+        hostname = get_hostname_by_node_id(node_id);
     rrd_unlock();
+
+    log_access("ACLK REQ [%s (%s)]: HEALTH LOG request received", node_id, hostname ? hostname : "N/A");
+    if (unlikely(!host))
+        freez(hostname);
+
     if (wc)
         aclk_database_enq_cmd(wc, &cmd);
     else {
         if (aclk_worker_enq_cmd(node_id, &cmd))
-            error_report("ACLK synchronization thread is not active for node id %s", node_id);
+            log_access("ACLK STA [%s (N/A)]: ACLK synchronization thread is not active.", node_id);
     }
     return;
 }
@@ -302,6 +478,22 @@ void aclk_push_alarm_health_log(struct aclk_database_worker_config *wc, struct a
     char *claim_id = is_agent_claimed();
     if (unlikely(!claim_id))
         return;
+
+    RRDHOST *host = wc->host;
+    if (unlikely(!host)) {
+        rrd_rdlock();
+        host = find_host_by_node_id(wc->node_id);
+        rrd_unlock();
+
+        if (unlikely(!host)) {
+            log_access(
+                "AC [%s (N/A)]: ACLK synchronization thread for %s is not yet linked to HOST.",
+                wc->node_id,
+                wc->host_guid);
+            freez(claim_id);
+            return;
+        }
+    }
 
     uint64_t first_sequence = 0;
     uint64_t last_sequence = 0;
@@ -352,10 +544,12 @@ void aclk_push_alarm_health_log(struct aclk_database_worker_config *wc, struct a
     alarm_log.node_id =  wc->node_id;
     alarm_log.log_entries = log_entries;
     alarm_log.status = wc->alert_updates == 0 ? 2 : 1;
+    alarm_log.enabled = (int)host->health_enabled;
 
     wc->alert_sequence_id = last_sequence;
 
     aclk_send_alarm_log_health(&alarm_log);
+    log_access("ACLK RES [%s (%s)]: HEALTH LOG SENT from %"PRIu64" to %"PRIu64, wc->node_id, wc->host ? wc->host->hostname : "N/A", first_sequence, last_sequence);
 
     rc = sqlite3_finalize(res);
     if (unlikely(rc != SQLITE_OK))
@@ -378,6 +572,8 @@ void aclk_send_alarm_configuration(char *config_hash)
     if (unlikely(!wc)) {
         return;
     }
+
+    log_access("ACLK REQ [%s (%s)]: Request to send alert config %s.", wc->node_id, wc->host ? wc->host->hostname : "N/A", config_hash);
 
     struct aclk_database_cmd cmd;
     memset(&cmd, 0, sizeof(cmd));
@@ -487,14 +683,14 @@ int aclk_push_alert_config_event(struct aclk_database_worker_config *wc, struct 
     }
 
     if (likely(p_alarm_config.cfg_hash)) {
-        debug(D_ACLK_SYNC, "Sending alert config for %s", config_hash);
+        log_access("ACLK RES [%s (%s)]: Sent alert config %s.", wc->node_id, wc->host ? wc->host->hostname : "N/A", config_hash);
         aclk_send_provide_alarm_cfg(&p_alarm_config);
         freez((char *) cmd.data_param);
         freez(p_alarm_config.cfg_hash);
         destroy_aclk_alarm_configuration(&alarm_config);
     }
     else
-        info("Alert config for %s not found", config_hash);
+        log_access("ACLK STA [%s (%s)]: Alert config for %s not found.", wc->node_id, wc->host ? wc->host->hostname : "N/A", config_hash);
 
 bind_fail:
     rc = sqlite3_finalize(res);
@@ -514,32 +710,42 @@ void aclk_start_alert_streaming(char *node_id, uint64_t batch_id, uint64_t start
     if (unlikely(!node_id))
         return;
 
+    //log_access("ACLK REQ [%s (N/A)]: ALERTS STREAM from %"PRIu64" batch=%"PRIu64".", node_id, start_seq_id, batch_id);
+
     uuid_t node_uuid;
     if (uuid_parse(node_id, node_uuid))
         return;
 
     struct aclk_database_worker_config *wc  = NULL;
-    rrd_wrlock();
+    rrd_rdlock();
     RRDHOST *host = find_host_by_node_id(node_id);
-    if (likely(host))
-        wc = (struct aclk_database_worker_config *)host->dbsync_worker;
     rrd_unlock();
+    if (likely(host)) {
+        wc = (struct aclk_database_worker_config *)host->dbsync_worker ?
+                 (struct aclk_database_worker_config *)host->dbsync_worker :
+                 (struct aclk_database_worker_config *)find_inactive_wc_by_node_id(node_id);
 
-    if (unlikely(!host->health_enabled)) {
-        info("Ignoring request to stream alert state changes, health is disabled for %s", host->machine_guid);
-        return;
-    }
+        if (unlikely(!host->health_enabled)) {
+            log_access("ACLK STA [%s (N/A)]: Ignoring request to stream alert state changes, health is disabled.", node_id);
+            return;
+        }
+
+        if (unlikely(batch_id == 1) && unlikely(start_seq_id == 1))
+            sql_queue_existing_alerts_to_aclk(host);
+    } else
+        wc = (struct aclk_database_worker_config *)find_inactive_wc_by_node_id(node_id);
 
     if (likely(wc)) {
-        info("START streaming alerts for %s enabled with batch_id %"PRIu64" and start_seq_id %"PRIu64, node_id, batch_id, start_seq_id);
+        log_access("ACLK REQ [%s (%s)]: ALERTS STREAM from %"PRIu64" batch=%"PRIu64, node_id, wc->host ? wc->host->hostname : "N/A", start_seq_id, batch_id);
         __sync_synchronize();
         wc->alerts_batch_id = batch_id;
         wc->alerts_start_seq_id = start_seq_id;
         wc->alert_updates = 1;
+        wc->pause_alert_updates = 0;
         __sync_synchronize();
     }
     else
-        error("ACLK synchronization thread is not active for host %s", host->hostname);
+        log_access("ACLK STA [%s (N/A)]: ACLK synchronization thread is not active.", node_id);
 
 #else
     UNUSED(node_id);
@@ -549,15 +755,12 @@ void aclk_start_alert_streaming(char *node_id, uint64_t batch_id, uint64_t start
     return;
 }
 
-int sql_queue_removed_alerts_to_aclk(RRDHOST *host)
+void sql_process_queue_removed_alerts_to_aclk(struct aclk_database_worker_config *wc, struct aclk_database_cmd cmd)
 {
-    CHECK_SQLITE_CONNECTION(db_meta);
-
-    struct aclk_database_worker_config *wc = (struct aclk_database_worker_config *) host->dbsync_worker;
-    if (unlikely(!wc)) {
-        return 1;
-    }
-
+    UNUSED(cmd);
+#ifndef ENABLE_NEW_CLOUD_PROTOCOL
+    UNUSED(wc);
+#else
     BUFFER *sql = buffer_create(1024);
 
     buffer_sprintf(sql,"insert into aclk_alert_%s (alert_unique_id, date_created) " \
@@ -568,7 +771,350 @@ int sql_queue_removed_alerts_to_aclk(RRDHOST *host)
 
     db_execute(buffer_tostring(sql));
 
+    log_access("ACLK STA [%s (%s)]: Queued removed alerts.", wc->node_id, wc->host ? wc->host->hostname : "N/A");
+
     buffer_free(sql);
 
+    wc->pause_alert_updates = 0;
+#endif
+    return;
+}
+
+void sql_queue_removed_alerts_to_aclk(RRDHOST *host)
+{
+#ifdef ENABLE_NEW_CLOUD_PROTOCOL
+    if (unlikely(!host->dbsync_worker))
+        return;
+
+    if (!claimed())
+        return;
+
+    struct aclk_database_cmd cmd;
+    memset(&cmd, 0, sizeof(cmd));
+    cmd.opcode = ACLK_DATABASE_QUEUE_REMOVED_ALERTS;
+    cmd.data = NULL;
+    cmd.data_param = NULL;
+    cmd.completion = NULL;
+    aclk_database_enq_cmd((struct aclk_database_worker_config *) host->dbsync_worker, &cmd);
+#else
+    UNUSED(host);
+#endif
+}
+
+void aclk_process_send_alarm_snapshot(char *node_id, char *claim_id, uint64_t snapshot_id, uint64_t sequence_id)
+{
+    UNUSED(claim_id);
+#ifdef ENABLE_NEW_CLOUD_PROTOCOL
+    if (unlikely(!node_id))
+        return;
+
+    uuid_t node_uuid;
+    if (uuid_parse(node_id, node_uuid))
+        return;
+
+    struct aclk_database_worker_config *wc = NULL;
+    rrd_rdlock();
+    RRDHOST *host = find_host_by_node_id(node_id);
+    if (likely(host))
+        wc = (struct aclk_database_worker_config *)host->dbsync_worker;
+    rrd_unlock();
+
+    if (likely(wc)) {
+        log_access(
+            "IN [%s (%s)]: Request to send alerts snapshot, snapshot_id %" PRIu64 " and ack_sequence_id %" PRIu64,
+            wc->node_id,
+            wc->host ? wc->host->hostname : "N/A",
+            snapshot_id,
+            sequence_id);
+        if (wc->alerts_snapshot_id == snapshot_id)
+            return;
+        __sync_synchronize();
+        wc->alerts_snapshot_id = snapshot_id;
+        wc->alerts_ack_sequence_id = sequence_id;
+        __sync_synchronize();
+
+        struct aclk_database_cmd cmd;
+        memset(&cmd, 0, sizeof(cmd));
+        cmd.opcode = ACLK_DATABASE_PUSH_ALERT_SNAPSHOT;
+        cmd.data_param = NULL;
+        cmd.completion = NULL;
+        aclk_database_enq_cmd(wc, &cmd);
+    } else
+        log_access("ACLK STA [%s (N/A)]: ACLK synchronization thread is not active.", node_id);
+#else
+    UNUSED(node_id);
+    UNUSED(snapshot_id);
+    UNUSED(sequence_id);
+#endif
+    return;
+}
+
+void aclk_mark_alert_cloud_ack(char *uuid_str, uint64_t alerts_ack_sequence_id)
+{
+    BUFFER *sql = buffer_create(1024);
+
+    if (alerts_ack_sequence_id != 0) {
+        buffer_sprintf(
+            sql,
+            "UPDATE aclk_alert_%s SET date_cloud_ack = strftime('%%s','now') WHERE sequence_id <= %" PRIu64 "",
+            uuid_str,
+            alerts_ack_sequence_id);
+        db_execute(buffer_tostring(sql));
+    }
+
+    buffer_free(sql);
+}
+
+#ifdef ENABLE_NEW_CLOUD_PROTOCOL
+void health_alarm_entry2proto_nolock(struct alarm_log_entry *alarm_log, ALARM_ENTRY *ae, RRDHOST *host)
+{
+    char *edit_command = ae->source ? health_edit_command_from_source(ae->source) : strdupz("UNKNOWN=0=UNKNOWN");
+    char config_hash_id[GUID_LEN + 1];
+    uuid_unparse_lower(ae->config_hash_id, config_hash_id);
+
+    alarm_log->chart = strdupz((char *)ae->chart);
+    alarm_log->name = strdupz((char *)ae->name);
+    alarm_log->family = strdupz((char *)ae->family);
+
+    alarm_log->batch_id = 0;
+    alarm_log->sequence_id = 0;
+    alarm_log->when = (time_t)ae->when;
+
+    alarm_log->config_hash = strdupz((char *)config_hash_id);
+
+    alarm_log->utc_offset = host->utc_offset;
+    alarm_log->timezone = strdupz((char *)host->abbrev_timezone);
+    alarm_log->exec_path = ae->exec ? strdupz((char *)ae->exec) : strdupz((char *)host->health_default_exec);
+    alarm_log->conf_source = ae->source ? strdupz((char *)ae->source) : strdupz((char *)"");
+
+    alarm_log->command = strdupz((char *)edit_command);
+
+    alarm_log->duration = (time_t)ae->duration;
+    alarm_log->non_clear_duration = (time_t)ae->non_clear_duration;
+    alarm_log->status = rrdcalc_status_to_proto_enum((RRDCALC_STATUS)ae->new_status);
+    alarm_log->old_status = rrdcalc_status_to_proto_enum((RRDCALC_STATUS)ae->old_status);
+    alarm_log->delay = (int)ae->delay;
+    alarm_log->delay_up_to_timestamp = (time_t)ae->delay_up_to_timestamp;
+    alarm_log->last_repeat = (time_t)ae->last_repeat;
+
+    alarm_log->silenced =
+        ((ae->flags & HEALTH_ENTRY_FLAG_SILENCED) || (ae->recipient && !strncmp((char *)ae->recipient, "silent", 6))) ?
+            1 :
+            0;
+
+    alarm_log->value_string = strdupz(ae->new_value_string);
+    alarm_log->old_value_string = strdupz(ae->old_value_string);
+
+    alarm_log->value = (!isnan(ae->new_value)) ? (calculated_number)ae->new_value : 0;
+    alarm_log->old_value = (!isnan(ae->old_value)) ? (calculated_number)ae->old_value : 0;
+
+    alarm_log->updated = (ae->flags & HEALTH_ENTRY_FLAG_UPDATED) ? 1 : 0;
+    alarm_log->rendered_info = ae->info ? strdupz(ae->info) : strdupz((char *)"");
+
+    freez(edit_command);
+}
+#endif
+
+#ifdef ENABLE_NEW_CLOUD_PROTOCOL
+static int have_recent_alarm(RRDHOST *host, uint32_t alarm_id, time_t mark)
+{
+    ALARM_ENTRY *ae = host->health_log.alarms;
+
+    while (ae) {
+        if (ae->alarm_id == alarm_id && ae->unique_id > mark &&
+            (ae->new_status != RRDCALC_STATUS_WARNING && ae->new_status != RRDCALC_STATUS_CRITICAL))
+            return 1;
+        ae = ae->next;
+    }
+
+    return 0;
+}
+#endif
+
+#define ALARM_EVENTS_PER_CHUNK 10
+void aclk_push_alert_snapshot_event(struct aclk_database_worker_config *wc, struct aclk_database_cmd cmd)
+{
+#ifndef ENABLE_NEW_CLOUD_PROTOCOL
+    UNUSED(wc);
+    UNUSED(cmd);
+#else
+    UNUSED(cmd);
+    // we perhaps we don't need this for snapshots
+    if (unlikely(!wc->alert_updates)) {
+        log_access("ACLK STA [%s (%s)]: Ignoring alert snapshot event, updates have been turned off for this node.", wc->node_id, wc->host ? wc->host->hostname : "N/A");
+        return;
+    }
+
+    if (unlikely(!wc->host)) {
+        error_report("ACLK synchronization thread for %s is not linked to HOST", wc->host_guid);
+        return;
+    }
+
+    if (unlikely(!wc->alerts_snapshot_id))
+        return;
+
+    char *claim_id = is_agent_claimed();
+    if (unlikely(!claim_id))
+        return;
+
+    log_access("ACLK REQ [%s (%s)]: Sending alerts snapshot, snapshot_id %" PRIu64, wc->node_id, wc->host ? wc->host->hostname : "N/A", wc->alerts_snapshot_id);
+
+    aclk_mark_alert_cloud_ack(wc->uuid_str, wc->alerts_ack_sequence_id);
+
+    RRDHOST *host = wc->host;
+    uint32_t cnt = 0;
+
+    netdata_rwlock_rdlock(&host->health_log.alarm_log_rwlock);
+
+    ALARM_ENTRY *ae = host->health_log.alarms;
+
+    for (; ae; ae = ae->next) {
+        if (likely(ae->updated_by_id))
+            continue;
+
+        if (unlikely(ae->new_status == RRDCALC_STATUS_UNINITIALIZED))
+            continue;
+
+        if (have_recent_alarm(host, ae->alarm_id, ae->unique_id))
+            continue;
+
+        cnt++;
+    }
+
+    if (cnt) {
+        uint32_t chunk = 1, chunks = 0;
+
+        chunks = (cnt / ALARM_EVENTS_PER_CHUNK) + (cnt % ALARM_EVENTS_PER_CHUNK != 0);
+        ae = host->health_log.alarms;
+
+        cnt = 0;
+        struct alarm_snapshot alarm_snap;
+        alarm_snap.node_id = wc->node_id;
+        alarm_snap.claim_id = claim_id;
+        alarm_snap.snapshot_id = wc->alerts_snapshot_id;
+        alarm_snap.chunks = chunks;
+        alarm_snap.chunk = chunk;
+
+        alarm_snapshot_proto_ptr_t snapshot_proto = NULL;
+
+        for (; ae; ae = ae->next) {
+            if (likely(ae->updated_by_id))
+                continue;
+
+            if (unlikely(ae->new_status == RRDCALC_STATUS_UNINITIALIZED))
+                continue;
+
+            if (have_recent_alarm(host, ae->alarm_id, ae->unique_id))
+                continue;
+
+            cnt++;
+
+            struct alarm_log_entry alarm_log;
+            alarm_log.node_id = wc->node_id;
+            alarm_log.claim_id = claim_id;
+
+            if (!snapshot_proto)
+                snapshot_proto = generate_alarm_snapshot_proto(&alarm_snap);
+
+            health_alarm_entry2proto_nolock(&alarm_log, ae, host);
+            add_alarm_log_entry2snapshot(snapshot_proto, &alarm_log);
+
+            if (cnt == ALARM_EVENTS_PER_CHUNK) {
+                aclk_send_alarm_snapshot(snapshot_proto);
+
+                cnt = 0;
+
+                if (chunk < chunks) {
+                    chunk++;
+
+                    struct alarm_snapshot alarm_snap;
+                    alarm_snap.node_id = wc->node_id;
+                    alarm_snap.claim_id = claim_id;
+                    alarm_snap.snapshot_id = wc->alerts_snapshot_id;
+                    alarm_snap.chunks = chunks;
+                    alarm_snap.chunk = chunk;
+
+                    snapshot_proto = generate_alarm_snapshot_proto(&alarm_snap);
+                }
+            }
+            destroy_alarm_log_entry(&alarm_log);
+        }
+        if (cnt)
+            aclk_send_alarm_snapshot(snapshot_proto);
+    }
+
+    netdata_rwlock_unlock(&host->health_log.alarm_log_rwlock);
+    wc->alerts_snapshot_id = 0;
+
+    freez(claim_id);
+#endif
+    return;
+}
+
+void sql_aclk_alert_clean_dead_entries(RRDHOST *host)
+{
+#ifdef ENABLE_NEW_CLOUD_PROTOCOL
+    if (!claimed())
+        return;
+
+    char uuid_str[GUID_LEN + 1];
+    uuid_unparse_lower_fix(&host->host_uuid, uuid_str);
+
+    BUFFER *sql = buffer_create(1024);
+
+    buffer_sprintf(sql,"delete from aclk_alert_%s where alert_unique_id not in "
+                   " (select unique_id from health_log_%s); ", uuid_str, uuid_str);
+    
+    char *err_msg = NULL;
+    int rc = sqlite3_exec(db_meta, buffer_tostring(sql), NULL, NULL, &err_msg);
+    if (rc != SQLITE_OK) {
+        error_report("Failed when trying to clean stale ACLK alert entries from aclk_alert_%s, error message \"%s""",
+                     uuid_str, err_msg);
+        sqlite3_free(err_msg);
+    }
+    buffer_free(sql);
+#else
+    UNUSED(host);
+#endif
+}
+
+int get_proto_alert_status(RRDHOST *host, struct proto_alert_status *proto_alert_status)
+{
+    int rc;
+    struct aclk_database_worker_config *wc  = NULL;
+    wc = (struct aclk_database_worker_config *)host->dbsync_worker;
+    if (!wc)
+        return 1;
+
+    proto_alert_status->alert_updates = wc->alert_updates;
+    proto_alert_status->alerts_batch_id = wc->alerts_batch_id;
+
+    BUFFER *sql = buffer_create(1024);
+    sqlite3_stmt *res = NULL;
+
+    buffer_sprintf(sql, "SELECT MIN(sequence_id), MAX(sequence_id), " \
+                   "(select MAX(sequence_id) from aclk_alert_%s where date_cloud_ack is not NULL), " \
+                   "(select MAX(sequence_id) from aclk_alert_%s where date_submitted is not NULL) " \
+                   "FROM aclk_alert_%s where date_submitted is null;", wc->uuid_str, wc->uuid_str, wc->uuid_str);
+
+    rc = sqlite3_prepare_v2(db_meta, buffer_tostring(sql), -1, &res, 0);
+    if (rc != SQLITE_OK) {
+        error_report("Failed to prepare statement to get alert log status from the database.");
+        buffer_free(sql);
+        return 1;
+    }
+
+    while (sqlite3_step(res) == SQLITE_ROW) {
+        proto_alert_status->pending_min_sequence_id = sqlite3_column_bytes(res, 0) > 0 ? (uint64_t) sqlite3_column_int64(res, 0) : 0;
+        proto_alert_status->pending_max_sequence_id = sqlite3_column_bytes(res, 1) > 0 ? (uint64_t) sqlite3_column_int64(res, 1) : 0;
+        proto_alert_status->last_acked_sequence_id = sqlite3_column_bytes(res, 2) > 0 ? (uint64_t) sqlite3_column_int64(res, 2) : 0;
+        proto_alert_status->last_submitted_sequence_id = sqlite3_column_bytes(res, 3) > 0 ? (uint64_t) sqlite3_column_int64(res, 3) : 0;
+    }
+
+    rc = sqlite3_finalize(res);
+    if (unlikely(rc != SQLITE_OK))
+        error_report("Failed to finalize statement to get alert log status from the database, rc = %d", rc);
+
+    buffer_free(sql);
     return 0;
 }

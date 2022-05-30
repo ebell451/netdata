@@ -289,14 +289,14 @@ static void pg_cache_reserve_pages(struct rrdengine_instance *ctx, unsigned numb
             ++failures;
             uv_rwlock_wrunlock(&pg_cache->pg_cache_rwlock);
 
-            init_completion(&compl);
+            completion_init(&compl);
             cmd.opcode = RRDENG_FLUSH_PAGES;
             cmd.completion = &compl;
             rrdeng_enq_cmd(&ctx->worker_config, &cmd);
             /* wait for some pages to be flushed */
             debug(D_RRDENGINE, "%s: waiting for pages to be written to disk before evicting.", __func__);
-            wait_for_completion(&compl);
-            destroy_completion(&compl);
+            completion_wait_for(&compl);
+            completion_destroy(&compl);
 
             if (unlikely(failures > 1)) {
                 unsigned long slots, usecs_to_sleep;
@@ -356,7 +356,7 @@ static void pg_cache_evict_unsafe(struct rrdengine_instance *ctx, struct rrdeng_
 {
     struct page_cache_descr *pg_cache_descr = descr->pg_cache_descr;
 
-    freez(pg_cache_descr->page);
+    dbengine_page_free(pg_cache_descr->page);
     pg_cache_descr->page = NULL;
     pg_cache_descr->flags &= ~RRD_PAGE_POPULATED;
     pg_cache_release_pages_unsafe(ctx, 1);
@@ -437,7 +437,6 @@ uint8_t pg_cache_punch_hole(struct rrdengine_instance *ctx, struct rrdeng_page_d
     ret = JudyLDel(&page_index->JudyL_array, (Word_t)(descr->start_time / USEC_PER_SEC), PJE0);
     if (unlikely(0 == ret)) {
         uv_rwlock_wrunlock(&page_index->lock);
-        error("Page under deletion was not in index.");
         if (unlikely(debug_flags & D_RRDENGINE)) {
             print_page_descr(descr);
         }
@@ -1067,10 +1066,13 @@ pg_cache_lookup_next(struct rrdengine_instance *ctx, struct pg_cache_page_index 
 
     page_not_in_cache = 0;
     uv_rwlock_rdlock(&page_index->lock);
+    int retry_count = 0;
     while (1) {
         descr = find_first_page_in_time_range(page_index, start_time, end_time);
-        if (NULL == descr || 0 == descr->page_length) {
+        if (NULL == descr || 0 == descr->page_length || retry_count == MAX_PAGE_CACHE_RETRY_WAIT) {
             /* non-empty page not found */
+            if (retry_count == MAX_PAGE_CACHE_RETRY_WAIT)
+                error_report("Page cache timeout while waiting for page %p : returning FAIL", descr);
             uv_rwlock_rdunlock(&page_index->lock);
 
             pg_cache_release_pages(ctx, 1);
@@ -1114,7 +1116,11 @@ pg_cache_lookup_next(struct rrdengine_instance *ctx, struct pg_cache_page_index 
             print_page_cache_descr(descr);
         if (!(flags & RRD_PAGE_POPULATED))
             page_not_in_cache = 1;
-        pg_cache_wait_event_unsafe(descr);
+
+        if (pg_cache_timedwait_event_unsafe(descr, 1) == UV_ETIMEDOUT) {
+            error_report("Page cache timeout while waiting for page %p : retry count = %d", descr, retry_count);
+            ++retry_count;
+        }
         rrdeng_page_descr_mutex_unlock(ctx, descr);
 
         /* reset scan to find again */
@@ -1222,7 +1228,7 @@ void free_page_cache(struct rrdengine_instance *ctx)
                 /* Check rrdenglocking.c */
                 pg_cache_descr = descr->pg_cache_descr;
                 if (pg_cache_descr->flags & RRD_PAGE_POPULATED) {
-                    freez(pg_cache_descr->page);
+                    dbengine_page_free(pg_cache_descr->page);
                     bytes_freed += RRDENG_BLOCK_SIZE;
                 }
                 rrdeng_destroy_pg_cache_descr(ctx, pg_cache_descr);

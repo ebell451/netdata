@@ -41,6 +41,154 @@ static struct bpf_object *objects = NULL;
 struct netdata_static_thread swap_threads = {"SWAP KERNEL", NULL, NULL, 1,
                                              NULL, NULL,  NULL};
 
+netdata_ebpf_targets_t swap_targets[] = { {.name = "swap_readpage", .mode = EBPF_LOAD_TRAMPOLINE},
+                                           {.name = "swap_writepage", .mode = EBPF_LOAD_TRAMPOLINE},
+                                           {.name = NULL, .mode = EBPF_LOAD_TRAMPOLINE}};
+
+#ifdef LIBBPF_MAJOR_VERSION
+#include "includes/swap.skel.h" // BTF code
+
+static struct swap_bpf *bpf_obj = NULL;
+
+/**
+ * Disable probe
+ *
+ * Disable all probes to use exclusively another method.
+ *
+ * @param obj is the main structure for bpf objects
+ */
+static void ebpf_swap_disable_probe(struct swap_bpf *obj)
+{
+    bpf_program__set_autoload(obj->progs.netdata_swap_readpage_probe, false);
+    bpf_program__set_autoload(obj->progs.netdata_swap_writepage_probe, false);
+}
+
+/*
+ * Disable trampoline
+ *
+ * Disable all trampoline to use exclusively another method.
+ *
+ * @param obj is the main structure for bpf objects.
+ */
+static void ebpf_swap_disable_trampoline(struct swap_bpf *obj)
+{
+    bpf_program__set_autoload(obj->progs.netdata_swap_readpage_fentry, false);
+    bpf_program__set_autoload(obj->progs.netdata_swap_writepage_fentry, false);
+}
+
+/**
+ * Set trampoline target
+ *
+ * Set the targets we will monitor.
+ *
+ * @param obj is the main structure for bpf objects.
+ */
+static void ebpf_swap_set_trampoline_target(struct swap_bpf *obj)
+{
+    bpf_program__set_attach_target(obj->progs.netdata_swap_readpage_fentry, 0,
+                                   swap_targets[NETDATA_KEY_SWAP_READPAGE_CALL].name);
+
+    bpf_program__set_attach_target(obj->progs.netdata_swap_writepage_fentry, 0,
+                                   swap_targets[NETDATA_KEY_SWAP_WRITEPAGE_CALL].name);
+}
+
+/**
+ * Mount Attach Probe
+ *
+ * Attach probes to target
+ *
+ * @param obj is the main structure for bpf objects.
+ *
+ * @return It returns 0 on success and -1 otherwise.
+ */
+static int ebpf_swap_attach_kprobe(struct swap_bpf *obj)
+{
+    obj->links.netdata_swap_readpage_probe = bpf_program__attach_kprobe(obj->progs.netdata_swap_readpage_probe,
+                                                                        false,
+                                                                        swap_targets[NETDATA_KEY_SWAP_READPAGE_CALL].name);
+    int ret = libbpf_get_error(obj->links.netdata_swap_readpage_probe);
+    if (ret)
+        return -1;
+
+    obj->links.netdata_swap_writepage_probe = bpf_program__attach_kprobe(obj->progs.netdata_swap_writepage_probe,
+                                                                         false,
+                                                                         swap_targets[NETDATA_KEY_SWAP_WRITEPAGE_CALL].name);
+    ret = libbpf_get_error(obj->links.netdata_swap_writepage_probe);
+    if (ret)
+        return -1;
+
+    return 0;
+}
+
+/**
+ * Set hash tables
+ *
+ * Set the values for maps according the value given by kernel.
+ *
+ * @param obj is the main structure for bpf objects.
+ */
+static void ebpf_swap_set_hash_tables(struct swap_bpf *obj)
+{
+    swap_maps[NETDATA_PID_SWAP_TABLE].map_fd = bpf_map__fd(obj->maps.tbl_pid_swap);
+    swap_maps[NETDATA_SWAP_CONTROLLER].map_fd = bpf_map__fd(obj->maps.swap_ctrl);
+    swap_maps[NETDATA_SWAP_GLOBAL_TABLE].map_fd = bpf_map__fd(obj->maps.tbl_swap);
+}
+
+/**
+ * Adjust Map Size
+ *
+ * Resize maps according input from users.
+ *
+ * @param obj is the main structure for bpf objects.
+ * @param em  structure with configuration
+ */
+static void ebpf_swap_adjust_map_size(struct swap_bpf *obj, ebpf_module_t *em)
+{
+    ebpf_update_map_size(obj->maps.tbl_pid_swap, &swap_maps[NETDATA_PID_SWAP_TABLE],
+                         em, bpf_map__name(obj->maps.tbl_pid_swap));
+}
+
+/**
+ * Load and attach
+ *
+ * Load and attach the eBPF code in kernel.
+ *
+ * @param obj is the main structure for bpf objects.
+ * @param em  structure with configuration
+ *
+ * @return it returns 0 on succes and -1 otherwise
+ */
+static inline int ebpf_swap_load_and_attach(struct swap_bpf *obj, ebpf_module_t *em)
+{
+    netdata_ebpf_targets_t *mt = em->targets;
+    netdata_ebpf_program_loaded_t test = mt[NETDATA_KEY_SWAP_READPAGE_CALL].mode;
+
+    if (test == EBPF_LOAD_TRAMPOLINE) {
+        ebpf_swap_disable_probe(obj);
+
+        ebpf_swap_set_trampoline_target(obj);
+    } else {
+        ebpf_swap_disable_trampoline(obj);
+    }
+
+    int ret = swap_bpf__load(obj);
+    if (ret) {
+        return ret;
+    }
+
+    ebpf_swap_adjust_map_size(obj, em);
+
+    ret = (test == EBPF_LOAD_TRAMPOLINE) ? swap_bpf__attach(obj) : ebpf_swap_attach_kprobe(obj);
+    if (!ret) {
+        ebpf_swap_set_hash_tables(obj);
+
+        ebpf_update_controller(swap_maps[NETDATA_SWAP_CONTROLLER].map_fd, em);
+    }
+
+    return ret;
+}
+#endif
+
 /*****************************************************************
  *
  *  FUNCTIONS TO CLOSE THE THREAD
@@ -92,6 +240,10 @@ static void ebpf_swap_cleanup(void *ptr)
         }
         bpf_object__close(objects);
     }
+#ifdef LIBBPF_MAJOR_VERSION
+    else if (bpf_obj)
+        swap_bpf__destroy(bpf_obj);
+#endif
 }
 
 /*****************************************************************
@@ -258,7 +410,7 @@ void *ebpf_swap_read_hash(void *ptr)
     heartbeat_init(&hb);
 
     ebpf_module_t *em = (ebpf_module_t *)ptr;
-    usec_t step = NETDATA_SWAP_SLEEP_MS * em->update_time;
+    usec_t step = NETDATA_SWAP_SLEEP_MS * em->update_every;
     while (!close_ebpf_plugin) {
         usec_t dt = heartbeat_next(&hb, step);
         (void)dt;
@@ -299,7 +451,7 @@ static void ebpf_swap_sum_pids(netdata_publish_swap_t *swap, struct pid_on_targe
 }
 
 /**
- * Send data to Netdata calling auxiliar functions.
+ * Send data to Netdata calling auxiliary functions.
  *
  * @param root the target list.
 */
@@ -393,8 +545,9 @@ static int ebpf_send_systemd_swap_charts()
  * Create charts for cgroup/application.
  *
  * @param type the chart type.
+ * @param update_every value to overwrite the update frequency set by the server.
  */
-static void ebpf_create_specific_swap_charts(char *type)
+static void ebpf_create_specific_swap_charts(char *type, int update_every)
 {
     ebpf_create_chart(type, NETDATA_MEM_SWAP_READ_CHART,
                       "Calls to function <code>swap_readpage</code>.",
@@ -402,7 +555,7 @@ static void ebpf_create_specific_swap_charts(char *type)
                       NETDATA_CGROUP_SWAP_READ_CONTEXT, NETDATA_EBPF_CHART_TYPE_LINE,
                       NETDATA_CHART_PRIO_CGROUPS_CONTAINERS + 5100,
                       ebpf_create_global_dimension,
-                      swap_publish_aggregated, 1, NETDATA_EBPF_MODULE_NAME_SWAP);
+                      swap_publish_aggregated, 1, update_every, NETDATA_EBPF_MODULE_NAME_SWAP);
 
     ebpf_create_chart(type, NETDATA_MEM_SWAP_WRITE_CHART,
                       "Calls to function <code>swap_writepage</code>.",
@@ -410,7 +563,8 @@ static void ebpf_create_specific_swap_charts(char *type)
                       NETDATA_CGROUP_SWAP_WRITE_CONTEXT, NETDATA_EBPF_CHART_TYPE_LINE,
                       NETDATA_CHART_PRIO_CGROUPS_CONTAINERS + 5101,
                       ebpf_create_global_dimension,
-                      &swap_publish_aggregated[NETDATA_KEY_SWAP_WRITEPAGE_CALL], 1, NETDATA_EBPF_MODULE_NAME_SWAP);
+                      &swap_publish_aggregated[NETDATA_KEY_SWAP_WRITEPAGE_CALL], 1,
+                      update_every, NETDATA_EBPF_MODULE_NAME_SWAP);
 }
 
 /**
@@ -419,18 +573,19 @@ static void ebpf_create_specific_swap_charts(char *type)
  * Create charts for cgroup/application.
  *
  * @param type the chart type.
+ * @param update_every value to overwrite the update frequency set by the server.
  */
-static void ebpf_obsolete_specific_swap_charts(char *type)
+static void ebpf_obsolete_specific_swap_charts(char *type, int update_every)
 {
     ebpf_write_chart_obsolete(type, NETDATA_MEM_SWAP_READ_CHART,"Calls to function <code>swap_readpage</code>.",
                               EBPF_COMMON_DIMENSION_CALL, NETDATA_SYSTEM_CGROUP_SWAP_SUBMENU,
                               NETDATA_EBPF_CHART_TYPE_LINE, NETDATA_CGROUP_SWAP_READ_CONTEXT,
-                              NETDATA_CHART_PRIO_CGROUPS_CONTAINERS + 5100);
+                              NETDATA_CHART_PRIO_CGROUPS_CONTAINERS + 5100, update_every);
 
     ebpf_write_chart_obsolete(type, NETDATA_MEM_SWAP_WRITE_CHART, "Calls to function <code>swap_writepage</code>.",
                               EBPF_COMMON_DIMENSION_CALL, NETDATA_SYSTEM_CGROUP_SWAP_SUBMENU,
                               NETDATA_EBPF_CHART_TYPE_LINE, NETDATA_CGROUP_SWAP_WRITE_CONTEXT,
-                              NETDATA_CHART_PRIO_CGROUPS_CONTAINERS + 5101);
+                              NETDATA_CHART_PRIO_CGROUPS_CONTAINERS + 5101, update_every);
 }
 
 /*
@@ -456,28 +611,32 @@ static void ebpf_send_specific_swap_data(char *type, netdata_publish_swap_t *val
  *  Create Systemd Swap Charts
  *
  *  Create charts when systemd is enabled
+ *
+ *  @param update_every value to overwrite the update frequency set by the server.
  **/
-static void ebpf_create_systemd_swap_charts()
+static void ebpf_create_systemd_swap_charts(int update_every)
 {
     ebpf_create_charts_on_systemd(NETDATA_MEM_SWAP_READ_CHART,
                                   "Calls to <code>swap_readpage</code>.",
                                   EBPF_COMMON_DIMENSION_CALL, NETDATA_SYSTEM_CGROUP_SWAP_SUBMENU,
                                   NETDATA_EBPF_CHART_TYPE_STACKED, 20191,
                                   ebpf_algorithms[NETDATA_EBPF_INCREMENTAL_IDX], NETDATA_SYSTEMD_SWAP_READ_CONTEXT,
-                                  NETDATA_EBPF_MODULE_NAME_SWAP);
+                                  NETDATA_EBPF_MODULE_NAME_SWAP, update_every);
 
     ebpf_create_charts_on_systemd(NETDATA_MEM_SWAP_WRITE_CHART,
                                   "Calls to function <code>swap_writepage</code>.",
                                   EBPF_COMMON_DIMENSION_CALL, NETDATA_SYSTEM_CGROUP_SWAP_SUBMENU,
                                   NETDATA_EBPF_CHART_TYPE_STACKED, 20192,
                                   ebpf_algorithms[NETDATA_EBPF_INCREMENTAL_IDX], NETDATA_SYSTEMD_SWAP_WRITE_CONTEXT,
-                                  NETDATA_EBPF_MODULE_NAME_SWAP);
+                                  NETDATA_EBPF_MODULE_NAME_SWAP, update_every);
 }
 
 /**
- * Send data to Netdata calling auxiliar functions.
+ * Send data to Netdata calling auxiliary functions.
+ *
+ * @param update_every value to overwrite the update frequency set by the server.
 */
-void ebpf_swap_send_cgroup_data()
+void ebpf_swap_send_cgroup_data(int update_every)
 {
     if (!ebpf_cgroup_pids)
         return;
@@ -493,7 +652,7 @@ void ebpf_swap_send_cgroup_data()
     if (has_systemd) {
         static int systemd_charts = 0;
         if (!systemd_charts) {
-            ebpf_create_systemd_swap_charts();
+            ebpf_create_systemd_swap_charts(update_every);
             systemd_charts = 1;
             fflush(stdout);
         }
@@ -506,7 +665,7 @@ void ebpf_swap_send_cgroup_data()
             continue;
 
         if (!(ect->flags & NETDATA_EBPF_CGROUP_HAS_SWAP_CHART) && ect->updated) {
-            ebpf_create_specific_swap_charts(ect->name);
+            ebpf_create_specific_swap_charts(ect->name, update_every);
             ect->flags |= NETDATA_EBPF_CGROUP_HAS_SWAP_CHART;
         }
 
@@ -514,7 +673,7 @@ void ebpf_swap_send_cgroup_data()
             if (ect->updated) {
                 ebpf_send_specific_swap_data(ect->name, &ect->publish_systemd_swap);
             } else {
-                ebpf_obsolete_specific_swap_charts(ect->name);
+                ebpf_obsolete_specific_swap_charts(ect->name, update_every);
                 ect->flags &= ~NETDATA_EBPF_CGROUP_HAS_SWAP_CHART;
             }
         }
@@ -536,27 +695,32 @@ static void swap_collector(ebpf_module_t *em)
 
     int apps = em->apps_charts;
     int cgroup = em->cgroup_charts;
+    int update_every = em->update_every;
+    int counter = update_every - 1;
     while (!close_ebpf_plugin) {
         pthread_mutex_lock(&collect_data_mutex);
         pthread_cond_wait(&collect_data_cond_var, &collect_data_mutex);
 
-        if (apps)
-            read_apps_table();
+        if (++counter == update_every) {
+            counter = 0;
+            if (apps)
+                read_apps_table();
 
-        if (cgroup)
-            ebpf_update_swap_cgroup();
+            if (cgroup)
+                ebpf_update_swap_cgroup();
 
-        pthread_mutex_lock(&lock);
+            pthread_mutex_lock(&lock);
 
-        swap_send_global();
+            swap_send_global();
 
-        if (apps)
-            ebpf_swap_send_apps_data(apps_groups_root_target);
+            if (apps)
+                ebpf_swap_send_apps_data(apps_groups_root_target);
 
-        if (cgroup)
-            ebpf_swap_send_cgroup_data();
+            if (cgroup)
+                ebpf_swap_send_cgroup_data(update_every);
 
-        pthread_mutex_unlock(&lock);
+            pthread_mutex_unlock(&lock);
+        }
         pthread_mutex_unlock(&collect_data_mutex);
     }
 }
@@ -576,8 +740,6 @@ static void swap_collector(ebpf_module_t *em)
  */
 void ebpf_swap_create_apps_charts(struct ebpf_module *em, void *ptr)
 {
-    UNUSED(em);
-
     struct target *root = ptr;
     ebpf_create_charts_on_apps(NETDATA_MEM_SWAP_READ_CHART,
                                "Calls to function <code>swap_readpage</code>.",
@@ -586,7 +748,7 @@ void ebpf_swap_create_apps_charts(struct ebpf_module *em, void *ptr)
                                NETDATA_EBPF_CHART_TYPE_STACKED,
                                20191,
                                ebpf_algorithms[NETDATA_EBPF_INCREMENTAL_IDX],
-                               root, NETDATA_EBPF_MODULE_NAME_SWAP);
+                               root, em->update_every, NETDATA_EBPF_MODULE_NAME_SWAP);
 
     ebpf_create_charts_on_apps(NETDATA_MEM_SWAP_WRITE_CHART,
                                "Calls to function <code>swap_writepage</code>.",
@@ -595,7 +757,7 @@ void ebpf_swap_create_apps_charts(struct ebpf_module *em, void *ptr)
                                NETDATA_EBPF_CHART_TYPE_STACKED,
                                20192,
                                ebpf_algorithms[NETDATA_EBPF_INCREMENTAL_IDX],
-                               root, NETDATA_EBPF_MODULE_NAME_SWAP);
+                               root, em->update_every, NETDATA_EBPF_MODULE_NAME_SWAP);
 }
 
 /**
@@ -628,17 +790,52 @@ static void ebpf_swap_allocate_global_vectors(int apps)
  * Create global charts
  *
  * Call ebpf_create_chart to create the charts for the collector.
+ *
+ * @param update_every value to overwrite the update frequency set by the server.
  */
-static void ebpf_create_swap_charts()
+static void ebpf_create_swap_charts(int update_every)
 {
     ebpf_create_chart(NETDATA_EBPF_SYSTEM_GROUP, NETDATA_MEM_SWAP_CHART,
-                      "Calls to internal functions used to access swap.",
+                      "Calls to access swap memory",
                       EBPF_COMMON_DIMENSION_CALL, NETDATA_SYSTEM_SWAP_SUBMENU,
                       NULL,
                       NETDATA_EBPF_CHART_TYPE_LINE,
                       202,
                       ebpf_create_global_dimension,
-                      swap_publish_aggregated, NETDATA_SWAP_END, NETDATA_EBPF_MODULE_NAME_SWAP);
+                      swap_publish_aggregated, NETDATA_SWAP_END,
+                      update_every, NETDATA_EBPF_MODULE_NAME_SWAP);
+}
+
+/*
+ * Load BPF
+ *
+ * Load BPF files.
+ *
+ * @param em the structure with configuration
+ */
+static int ebpf_swap_load_bpf(ebpf_module_t *em)
+{
+    int ret = 0;
+    if (em->load == EBPF_LOAD_LEGACY) {
+        probe_links = ebpf_load_program(ebpf_plugin_dir, em, running_on_kernel, isrh, &objects);
+        if (!probe_links) {
+            ret = -1;
+        }
+    }
+#ifdef LIBBPF_MAJOR_VERSION
+    else {
+        bpf_obj = swap_bpf__open();
+        if (!bpf_obj)
+            ret = -1;
+        else
+            ret = ebpf_swap_load_and_attach(bpf_obj, em);
+    }
+#endif
+
+    if (ret)
+        error("%s %s", EBPF_DEFAULT_ERROR_MSG, em->thread_name);
+
+    return ret;
 }
 
 /**
@@ -662,8 +859,11 @@ void *ebpf_swap_thread(void *ptr)
     if (!em->enabled)
         goto endswap;
 
-    probe_links = ebpf_load_program(ebpf_plugin_dir, em, kernel_string, &objects);
-    if (!probe_links) {
+#ifdef LIBBPF_MAJOR_VERSION
+    ebpf_adjust_thread_load(em, default_btf);
+#endif
+   if (ebpf_swap_load_bpf(em)) {
+        em->enabled = CONFIG_BOOLEAN_NO;
         goto endswap;
     }
 
@@ -674,12 +874,16 @@ void *ebpf_swap_thread(void *ptr)
                        algorithms, NETDATA_SWAP_END);
 
     pthread_mutex_lock(&lock);
-    ebpf_create_swap_charts();
+    ebpf_create_swap_charts(em->update_every);
+    ebpf_update_stats(&plugin_statistics, em);
     pthread_mutex_unlock(&lock);
 
     swap_collector(em);
 
 endswap:
+    if (!em->enabled)
+        ebpf_update_disabled_plugin_stats(em);
+
     netdata_thread_cleanup_pop(1);
     return NULL;
 }

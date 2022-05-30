@@ -9,24 +9,24 @@ We have given special attention to all aspects of Netdata, ensuring that everyth
 
 **Table of Contents**
 
-1.  [Your data are safe with Netdata](#your-data-are-safe-with-netdata)
+1.  [Your data is safe with Netdata](#your-data-is-safe-with-netdata)
 2.  [Your systems are safe with Netdata](#your-systems-are-safe-with-netdata)
 3.  [Netdata is read-only](#netdata-is-read-only)
 4.  [Netdata viewers authentication](#netdata-viewers-authentication)
-    -   [Why Netdata should be protected](#why-netdata-should-be-protected)
-    -   [Protect Netdata from the internet](#protect-netdata-from-the-internet)
-        		\- [Expose Netdata only in a private LAN](#expose-netdata-only-in-a-private-lan)
-        		\- [Use an authenticating web server in proxy mode](#use-an-authenticating-web-server-in-proxy-mode)
-        		\- [Other methods](#other-methods)
+    *   [Why Netdata should be protected](#why-netdata-should-be-protected)
+    *   [Protect Netdata from the internet](#protect-netdata-from-the-internet)
+        * [Expose Netdata only in a private LAN](#expose-netdata-only-in-a-private-lan)
+        * [Use an authenticating web server in proxy mode](#use-an-authenticating-web-server-in-proxy-mode)
+        * [Other methods](#other-methods)
 5.  [Registry or how to not send any information to a third party server](#registry-or-how-to-not-send-any-information-to-a-third-party-server)
 
-## Your data are safe with Netdata
+## Your data is safe with Netdata
 
 Netdata collects raw data from many sources. For each source, Netdata uses a plugin that connects to the source (or reads the relative files produced by the source), receives raw data and processes them to calculate the metrics shown on Netdata dashboards.
 
 Even if Netdata plugins connect to your database server, or read your application log file to collect raw data, the product of this data collection process is always a number of **chart metadata and metric values** (summarized data for dashboard visualization). All Netdata plugins (internal to the Netdata daemon, and external ones written in any computer language), convert raw data collected into metrics, and only these metrics are stored in Netdata databases, sent to upstream Netdata servers, or archived to external time-series databases.
 
-> The **raw data** collected by Netdata, do not leave the host they are collected. **The only data Netdata exposes are chart metadata and metric values.**
+> The **raw data** collected by Netdata, does not leave the host when collected. **The only data Netdata exposes are chart metadata and metric values.**
 
 This means that Netdata can safely be used in environments that require the highest level of data isolation (like PCI Level 1).
 
@@ -34,7 +34,7 @@ This means that Netdata can safely be used in environments that require the high
 
 We are very proud that **the Netdata daemon runs as a normal system user, without any special privileges**. This is quite an achievement for a monitoring system that collects all kinds of system and application metrics.
 
-There are a few cases however that raw source data are only exposed to processes with escalated privileges. To support these cases, Netdata attempts to minimize and completely isolate the code that runs with escalated privileges.
+There are a few cases, however, that raw source data are only exposed to processes with escalated privileges. To support these cases, Netdata attempts to minimize and completely isolate the code that runs with escalated privileges.
 
 So, Netdata **plugins**, even those running with escalated capabilities or privileges, perform a **hard coded data collection job**. They do not accept commands from Netdata. The communication is strictly **unidirectional**: from the plugin towards the Netdata daemon. The original application data collected by each plugin do not leave the process they are collected, are not saved and are not transferred to the Netdata daemon. The communication from the plugins to the Netdata daemon includes only chart metadata and processed metric values.
 
@@ -205,7 +205,7 @@ The default configuration uses a public registry under registry.my-netdata.io (m
 -   The url where you open the web-ui in the browser (via http request referrer)
 -   The hostnames of the Netdata servers
 
-If sending this information to the central Netdata registry violates your security policies, you can configure Netdat to [run your own registry](/registry/README.md#run-your-own-registry).
+If sending this information to the central Netdata registry violates your security policies, you can configure Netdata to [run your own registry](/registry/README.md#run-your-own-registry).
 
 ### Opt-out of anonymous statistics
 
@@ -226,4 +226,4 @@ _actively_ contributing to Netdata's future.
 | `/var/lib/netdata`|user `netdata`<br/>group `netdata`|dirs `0750`<br/>files `0660`|reads, writes, creates, deletes|**Netdata permanent database files**<br/>Netdata stores here the registry data, health alarm log db, etc.|
 | `/var/log/netdata`|user `netdata`<br/>group `root`|dirs `0755`<br/>files `0644`|writes, creates|**Netdata log files**<br/>all the Netdata applications, logs their errors or other informational messages to files in this directory. These files should be log rotated.|
 
-[![analytics](https://www.google-analytics.com/collect?v=1&aip=1&t=pageview&_s=1&ds=github&dr=https%3A%2F%2Fgithub.com%2Fnetdata%2Fnetdata&dl=https%3A%2F%2Fmy-netdata.io%2Fgithub%2Fdocs%2Fnetdata-security&_u=MAC~&cid=5792dfd7-8dc4-476b-af31-da2fdb9f93d2&tid=UA-64295674-3)](<>)
+

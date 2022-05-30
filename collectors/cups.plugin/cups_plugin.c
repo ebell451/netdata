@@ -7,37 +7,10 @@
  */
 
 #include "libnetdata/libnetdata.h"
+#include "libnetdata/required_dummies.h"
+
 #include <cups/cups.h>
 #include <limits.h>
-
-// callback required by fatal()
-void netdata_cleanup_and_exit(int ret) {
-    exit(ret);
-}
-
-void send_statistics( const char *action, const char *action_result, const char *action_data) {
-    (void) action;
-    (void) action_result;
-    (void) action_data;
-    return;
-}
-
-// callbacks required by popen()
-void signals_block(void) {};
-void signals_unblock(void) {};
-void signals_reset(void) {};
-
-// callback required by eval()
-int health_variable_lookup(const char *variable, uint32_t hash, struct rrdcalc *rc, calculated_number *result) {
-    (void)variable;
-    (void)hash;
-    (void)rc;
-    (void)result;
-    return 0;
-};
-
-// required by get_system_cpus()
-char *netdata_configured_host_prefix = "";
 
 // Variables
 
@@ -188,12 +161,12 @@ struct job_metrics *get_job_metrics(char *dest) {
         reset_job_metrics(&new_job_metrics, NULL);
         jm = dictionary_set(dict_dest_job_metrics, dest, &new_job_metrics, sizeof(struct job_metrics));
 
-        printf("CHART cups.job_num_%s '' 'Active job number of destination %s' jobs '%s' job_num stacked %i %i\n", dest, dest, dest, netdata_priority++, netdata_update_every);
+        printf("CHART cups.job_num_%s '' 'Active job number of destination %s' jobs '%s' cups.job_num stacked %i %i\n", dest, dest, dest, netdata_priority++, netdata_update_every);
         printf("DIMENSION pending '' absolute 1 1\n");
         printf("DIMENSION held '' absolute 1 1\n");
         printf("DIMENSION processing '' absolute 1 1\n");
 
-        printf("CHART cups.job_size_%s '' 'Active job size of destination %s' KB '%s' job_size stacked %i %i\n", dest, dest, dest, netdata_priority++, netdata_update_every);
+        printf("CHART cups.job_size_%s '' 'Active job size of destination %s' KB '%s' cups.job_size stacked %i %i\n", dest, dest, dest, netdata_priority++, netdata_update_every);
         printf("DIMENSION pending '' absolute 1 1\n");
         printf("DIMENSION held '' absolute 1 1\n");
         printf("DIMENSION processing '' absolute 1 1\n");
@@ -222,12 +195,12 @@ int collect_job_metrics(char *name, void *entry, void *data) {
             "END\n",
             name, jm->size_pending, jm->size_held, jm->size_processing);
     } else {
-        printf("CHART cups.job_num_%s '' 'Active job number of destination %s' jobs '%s' job_num stacked 1 %i 'obsolete'\n", name, name, name, netdata_update_every);
+        printf("CHART cups.job_num_%s '' 'Active job number of destination %s' jobs '%s' cups.job_num stacked 1 %i 'obsolete'\n", name, name, name, netdata_update_every);
         printf("DIMENSION pending '' absolute 1 1\n");
         printf("DIMENSION held '' absolute 1 1\n");
         printf("DIMENSION processing '' absolute 1 1\n");
 
-        printf("CHART cups.job_size_%s '' 'Active job size of destination %s' KB '%s' job_size stacked 1 %i 'obsolete'\n", name, name, name, netdata_update_every);
+        printf("CHART cups.job_size_%s '' 'Active job size of destination %s' KB '%s' cups.job_size stacked 1 %i 'obsolete'\n", name, name, name, netdata_update_every);
         printf("DIMENSION pending '' absolute 1 1\n");
         printf("DIMENSION held '' absolute 1 1\n");
         printf("DIMENSION processing '' absolute 1 1\n");
@@ -251,6 +224,7 @@ void reset_metrics() {
 }
 
 int main(int argc, char **argv) {
+    clocks_init();
 
     // ------------------------------------------------------------------------
     // initialization of netdata plugin
@@ -402,22 +376,22 @@ int main(int argc, char **argv) {
         if (unlikely(!cups_printer_by_option_created))
         {
             cups_printer_by_option_created = 1;
-            printf("CHART cups.dest_state '' 'Destinations by state' dests overview dests stacked 100000 %i\n", netdata_update_every);
+            printf("CHART cups.dest_state '' 'Destinations by state' dests overview cups.dests_state stacked 100000 %i\n", netdata_update_every);
             printf("DIMENSION idle '' absolute 1 1\n");
             printf("DIMENSION printing '' absolute 1 1\n");
             printf("DIMENSION stopped '' absolute 1 1\n");
 
-            printf("CHART cups.dest_option '' 'Destinations by option' dests overview dests line 100001 %i\n", netdata_update_every);
+            printf("CHART cups.dest_option '' 'Destinations by option' dests overview cups.dests_option line 100001 %i\n", netdata_update_every);
             printf("DIMENSION total '' absolute 1 1\n");
             printf("DIMENSION acceptingjobs '' absolute 1 1\n");
             printf("DIMENSION shared '' absolute 1 1\n");
 
-            printf("CHART cups.job_num '' 'Total active job number' jobs overview job_num stacked 100002 %i\n", netdata_update_every);
+            printf("CHART cups.job_num '' 'Total active job number' jobs overview cups.job_num stacked 100002 %i\n", netdata_update_every);
             printf("DIMENSION pending '' absolute 1 1\n");
             printf("DIMENSION held '' absolute 1 1\n");
             printf("DIMENSION processing '' absolute 1 1\n");
 
-            printf("CHART cups.job_size '' 'Total active job size' KB overview job_size stacked 100003 %i\n", netdata_update_every);
+            printf("CHART cups.job_size '' 'Total active job size' KB overview cups.job_size stacked 100003 %i\n", netdata_update_every);
             printf("DIMENSION pending '' absolute 1 1\n");
             printf("DIMENSION held '' absolute 1 1\n");
             printf("DIMENSION processing '' absolute 1 1\n");

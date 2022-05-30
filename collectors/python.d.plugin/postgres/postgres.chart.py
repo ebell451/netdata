@@ -196,7 +196,7 @@ FROM
     FROM pg_catalog.pg_ls_dir('pg_wal') AS wal(name)
     WHERE name ~ '^[0-9A-F]{24}$'
     ORDER BY
-        (pg_stat_file('pg_wal/'||name)).modification,
+        (pg_stat_file('pg_wal/'||name, true)).modification,
         wal.name DESC) sub;
 """,
     V96: """
@@ -223,7 +223,7 @@ FROM
     FROM pg_catalog.pg_ls_dir('pg_xlog') AS wal(name)
     WHERE name ~ '^[0-9A-F]{24}$'
     ORDER BY
-        (pg_stat_file('pg_xlog/'||name)).modification,
+        (pg_stat_file('pg_xlog/'||name, true)).modification,
         wal.name DESC) sub;
 """,
 }
@@ -336,18 +336,18 @@ WHERE d.datallowconn;
 QUERY_TABLE_STATS = {
     DEFAULT: """
 SELECT
-    ((sum(relpages) * 8) * 1024) AS table_size,
-    count(1)                     AS table_count
+    sum(relpages) * current_setting('block_size')::numeric AS table_size,
+    count(1) AS table_count
 FROM pg_class
-WHERE relkind IN ('r', 't');
+WHERE relkind IN ('r', 't', 'm');
 """,
 }
 
 QUERY_INDEX_STATS = {
     DEFAULT: """
 SELECT
-    ((sum(relpages) * 8) * 1024) AS index_size,
-    count(1)                     AS index_count
+    sum(relpages) * current_setting('block_size')::numeric AS index_size,
+    count(1) AS index_count
 FROM pg_class
 WHERE relkind = 'i';
 """,

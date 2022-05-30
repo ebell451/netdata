@@ -2,17 +2,23 @@
 
 #include "../libnetdata.h"
 
+#define get_storage_number_flags(value) \
+    ((((storage_number)(value)) & (1 << 24)) | \
+     (((storage_number)(value)) & (1 << 25)) | \
+     (((storage_number)(value)) & (1 << 26)))
+
 storage_number pack_storage_number(calculated_number value, uint32_t flags) {
     // bit 32 = sign 0:positive, 1:negative
     // bit 31 = 0:divide, 1:multiply
     // bit 30, 29, 28 = (multiplier or divider) 0-7 (8 total)
     // bit 27 SN_EXISTS_100
     // bit 26 SN_EXISTS_RESET
-    // bit 25 SN_EXISTS
+    // bit 25 SN_ANOMALY_BIT = 0: anomalous, 1: not anomalous
     // bit 24 to bit 1 = the value
 
     storage_number r = get_storage_number_flags(flags);
-    if(!value) return r;
+    if(!value)
+        goto RET_SN;
 
     int m = 0;
     calculated_number n = value, factor = 10;
@@ -47,7 +53,7 @@ storage_number pack_storage_number(calculated_number value, uint32_t flags) {
             error("Number " CALCULATED_NUMBER_FORMAT " is too big.", value);
             #endif
             r += 0x00ffffff;
-            return r;
+            goto RET_SN;
         }
     }
     else {
@@ -78,51 +84,28 @@ storage_number pack_storage_number(calculated_number value, uint32_t flags) {
     r += (storage_number)n;
 #endif
 
+RET_SN:
+    if (r == SN_EMPTY_SLOT)
+        r = SN_ANOMALOUS_ZERO;
+
     return r;
 }
 
-calculated_number unpack_storage_number(storage_number value) {
-    if(!value) return 0;
+// Lookup table to make storage number unpacking efficient.
+calculated_number unpack_storage_number_lut10x[4 * 8];
 
-    int sign = 0, exp = 0;
-    int factor = 10;
+__attribute__((constructor)) void initialize_lut(void) {
+    // The lookup table is partitioned in 4 subtables based on the
+    // values of the factor and exp bits.
+    for (int i = 0; i < 8; i++) {
+        // factor = 0
+        unpack_storage_number_lut10x[0 * 8 + i] = 1 / pow(10, i);    // exp = 0
+        unpack_storage_number_lut10x[1 * 8 + i] = pow(10, i);        // exp = 1
 
-    // bit 32 = 0:positive, 1:negative
-    if(unlikely(value & (1 << 31)))
-        sign = 1;
-
-    // bit 31 = 0:divide, 1:multiply
-    if(unlikely(value & (1 << 30)))
-        exp = 1;
-
-    // bit 27 SN_EXISTS_100
-    if(unlikely(value & (1 << 26)))
-        factor = 100;
-
-    // bit 26 SN_EXISTS_RESET
-    // bit 25 SN_EXISTS
-
-    // bit 30, 29, 28 = (multiplier or divider) 0-7 (8 total)
-    int mul = (value & ((1<<29)|(1<<28)|(1<<27))) >> 27;
-
-    // bit 24 to bit 1 = the value, so remove all other bits
-    value ^= value & ((1<<31)|(1<<30)|(1<<29)|(1<<28)|(1<<27)|(1<<26)|(1<<25)|(1<<24));
-
-    calculated_number n = value;
-
-    // fprintf(stderr, "UNPACK: %08X, sign = %d, exp = %d, mul = %d, factor = %d, n = " CALCULATED_NUMBER_FORMAT "\n", value, sign, exp, mul, factor, n);
-
-    if(exp) {
-        for(; mul; mul--)
-            n *= factor;
+        // factor = 1
+        unpack_storage_number_lut10x[2 * 8 + i] = 1 / pow(100, i);   // exp = 0
+        unpack_storage_number_lut10x[3 * 8 + i] = pow(100, i);       // exp = 1
     }
-    else {
-        for( ; mul ; mul--)
-            n /= 10;
-    }
-
-    if(sign) n = -n;
-    return n;
 }
 
 /*

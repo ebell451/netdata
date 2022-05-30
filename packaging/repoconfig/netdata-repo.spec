@@ -14,8 +14,14 @@ Source2:        netdata.repo.suse
 Source3:        netdata-edge.repo.suse
 Source4:        netdata.repo.centos
 Source5:        netdata-edge.repo.centos
+Source6:        netdata.repo.ol
+Source7:        netdata-edge.repo.ol
 
 BuildArch:      noarch
+
+%if 0%{?centos_ver} && 0%{?centos_ver} < 8
+Requires:       yum-plugin-priorities
+%endif
 
 # Overlapping file installs
 Conflicts:      netdata-repo-edge
@@ -39,6 +45,11 @@ install -pm 644 %{SOURCE3} ./netdata-edge.repo
 %if 0%{?centos_ver}
 install -pm 644 %{SOURCE4} ./netdata.repo
 install -pm 644 %{SOURCE5} ./netdata-edge.repo
+%endif
+
+%if 0%{?oraclelinux}
+install -pm 644 %{SOURCE6} ./netdata.repo
+install -pm 644 %{SOURCE7} ./netdata-edge.repo
 %endif
 
 %build

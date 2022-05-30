@@ -112,7 +112,7 @@ inline void health_alarm_log_save(RRDHOST *host, ALARM_ENTRY *ae) {
                         "\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s"
                         "\t%d\t%d\t%d\t%d"
                         "\t" CALCULATED_NUMBER_FORMAT_AUTO "\t" CALCULATED_NUMBER_FORMAT_AUTO
-                        "\t%016lx"
+                        "\t%016"PRIx64""
                         "\t%s\t%s\t%s"
                         "\n"
                             , (ae->flags & HEALTH_ENTRY_FLAG_SAVED)?'U':'A'
@@ -162,7 +162,7 @@ inline void health_alarm_log_save(RRDHOST *host, ALARM_ENTRY *ae) {
 
 #ifdef ENABLE_ACLK
     if (netdata_cloud_setting) {
-        sql_queue_alarm_to_aclk(host, ae);
+        sql_queue_alarm_to_aclk(host, ae, 0);
     }
 #endif
 }
@@ -560,10 +560,6 @@ inline void health_alarm_log(
 ) {
     debug(D_HEALTH, "Health adding alarm log entry with id: %u", ae->unique_id);
 
-    if(unlikely(alarm_entry_isrepeating(host, ae))) {
-        error("Repeating alarms cannot be added to host's alarm log entries. It seems somewhere in the logic, API is being misused. Alarm id: %u", ae->alarm_id);
-        return;
-    }
     // link it
     netdata_rwlock_wrlock(&host->health_log.alarm_log_rwlock);
     ae->next = host->health_log.alarms;

@@ -6,7 +6,7 @@ custom_edit_url: https://github.com/netdata/netdata/edit/master/docs/visualize/i
 
 # Interact with dashboards and charts
 
-> ⚠️ There is a new version of charts that is currently **only** available on [Netdata Cloud](/docs/cloud/visualize/interact-with-new-charts). We didn't
+> ⚠️ There is a new version of charts that is currently **only** available on [Netdata Cloud](https://learn.netdata.cloud/docs/cloud/visualize/interact-new-charts). We didn't
 > want to keep this valuable feature from you, so after we get this into your hands on the Cloud, we will collect and implement your feedback to make sure we are providing the best possible version of the feature on the Netdata Agent dashboard as quickly as possible.
 
 You can find Netdata's dashboards in two places: locally served at `http://NODE:19999` by the Netdata Agent, and in
@@ -122,10 +122,10 @@ to get informed when something goes wrong in your infrastructure.
 ### Related reference documentation
 
 -   [Netdata Agent · Web dashboards overview](/web/README.md)
--   [Netdata Cloud · Interact with new charts](https://learn.netdata.cloud/docs/cloud/visualize/interact-with-new-charts)
+-   [Netdata Cloud · Interact with new charts](https://learn.netdata.cloud/docs/cloud/visualize/interact-new-charts)
 -   [Netdata Cloud · War Rooms](https://learn.netdata.cloud/docs/cloud/war-rooms)
 -   [Netdata Cloud · Overview](https://learn.netdata.cloud/docs/cloud/visualize/overview)
 -   [Netdata Cloud · Nodes](https://learn.netdata.cloud/docs/cloud/visualize/nodes)
 -   [Netdata Cloud · Build new dashboards](https://learn.netdata.cloud/docs/cloud/visualize/dashboards)
 
-[![analytics](https://www.google-analytics.com/collect?v=1&aip=1&t=pageview&_s=1&ds=github&dr=https%3A%2F%2Fgithub.com%2Fnetdata%2Fnetdata&dl=https%3A%2F%2Fmy-netdata.io%2Fgithub%2Fdocs%2Fvisualize%2Finteract-dashboards-charts&_u=MAC~&cid=5792dfd7-8dc4-476b-af31-da2fdb9f93d2&tid=UA-64295674-3)](<>)
+

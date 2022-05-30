@@ -7,19 +7,7 @@
 
 // netdata internal data collection plugins
 
-#include "checks.plugin/plugin_checks.h"
-#include "freebsd.plugin/plugin_freebsd.h"
-#include "idlejitter.plugin/plugin_idlejitter.h"
-#include "cgroups.plugin/sys_fs_cgroup.h"
-#include "diskspace.plugin/plugin_diskspace.h"
-#include "timex.plugin/plugin_timex.h"
-#include "proc.plugin/plugin_proc.h"
-#include "tc.plugin/plugin_tc.h"
-#include "macos.plugin/plugin_macos.h"
-#include "statsd.plugin/statsd.h"
-
 #include "plugins.d/plugins_d.h"
-
 
 // ----------------------------------------------------------------------------
 // netdata chart priorities
@@ -42,6 +30,7 @@
 #define NETDATA_CHART_PRIO_SYSTEM_IP                    501
 #define NETDATA_CHART_PRIO_SYSTEM_IPV6                  502
 #define NETDATA_CHART_PRIO_SYSTEM_PROCESSES             600
+#define NETDATA_CHART_PRIO_SYSTEM_PROCESS_STATES        601
 #define NETDATA_CHART_PRIO_SYSTEM_FORKS                 700
 #define NETDATA_CHART_PRIO_SYSTEM_ACTIVE_PROCESSES      750
 #define NETDATA_CHART_PRIO_SYSTEM_CTXT                  800
@@ -55,6 +44,7 @@
 #define NETDATA_CHART_PRIO_SYSTEM_ENTROPY              1000
 #define NETDATA_CHART_PRIO_SYSTEM_UPTIME               1000
 #define NETDATA_CHART_PRIO_CLOCK_SYNC_STATE            1100
+#define NETDATA_CHART_PRIO_CLOCK_STATUS                1105
 #define NETDATA_CHART_PRIO_CLOCK_SYNC_OFFSET           1110
 #define NETDATA_CHART_PRIO_SYSTEM_IPC_MSQ_QUEUES       1200 // freebsd only
 #define NETDATA_CHART_PRIO_SYSTEM_IPC_MSQ_MESSAGES     1201
@@ -133,12 +123,13 @@
 // MDSTAT
 
 #define NETDATA_CHART_PRIO_MDSTAT_HEALTH              2100
-#define NETDATA_CHART_PRIO_MDSTAT_NONREDUNDANT        2101
-#define NETDATA_CHART_PRIO_MDSTAT_DISKS               2102 // 5 charts per raid
-#define NETDATA_CHART_PRIO_MDSTAT_MISMATCH            2103
-#define NETDATA_CHART_PRIO_MDSTAT_OPERATION           2104
-#define NETDATA_CHART_PRIO_MDSTAT_FINISH              2105
-#define NETDATA_CHART_PRIO_MDSTAT_SPEED               2106
+#define NETDATA_CHART_PRIO_MDSTAT_FLUSH               2101
+#define NETDATA_CHART_PRIO_MDSTAT_NONREDUNDANT        2105
+#define NETDATA_CHART_PRIO_MDSTAT_DISKS               2106 // 5 charts per raid
+#define NETDATA_CHART_PRIO_MDSTAT_MISMATCH            2107
+#define NETDATA_CHART_PRIO_MDSTAT_OPERATION           2108
+#define NETDATA_CHART_PRIO_MDSTAT_FINISH              2109
+#define NETDATA_CHART_PRIO_MDSTAT_SPEED               2110
 
 // Filesystem
 #define NETDATA_CHART_PRIO_FILESYSTEM_VFS_CLEAN       2150
@@ -369,10 +360,8 @@
 
 #define NETDATA_CHART_PRIO_CHECKS                    99999
 
-#define NETDATA_CHART_PRIO_NETDATA_DISKSPACE        132020
 #define NETDATA_CHART_PRIO_NETDATA_TIMEX            132030
-#define NETDATA_CHART_PRIO_NETDATA_TC_CPU           135000
-#define NETDATA_CHART_PRIO_NETDATA_TC_TIME          135001
+#define NETDATA_CHART_PRIO_NETDATA_TC_TIME          1000100
 
 
 #endif //NETDATA_ALL_H

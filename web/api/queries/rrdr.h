@@ -24,6 +24,7 @@ typedef enum rrdr_options {
     RRDR_OPTION_MATCH_NAMES  = 0x00008000, // when filtering dimensions, match only names
     RRDR_OPTION_CUSTOM_VARS  = 0x00010000, // when wrapping response in a JSON, return custom variables in response
     RRDR_OPTION_ALLOW_PAST   = 0x00020000, // The after parameter can extend in the past before the first entry
+    RRDR_OPTION_ANOMALY_BIT  = 0x00040000, // Return the anomaly bit stored in each collected_number
 } RRDR_OPTIONS;
 
 typedef enum rrdr_value_flag {
@@ -46,6 +47,7 @@ typedef enum rrdr_result_flags {
     RRDR_RESULT_OPTION_RELATIVE      = 0x00000002, // the query uses relative time-frames
                                                    // (should not to be cached by browsers and proxies)
     RRDR_RESULT_OPTION_VARIABLE_STEP = 0x00000004, // the query uses variable-step time-frames
+    RRDR_RESULT_OPTION_CANCEL        = 0x00000008, // the query needs to be cancelled
 } RRDR_RESULT_FLAGS;
 
 typedef struct rrdresult {
@@ -81,7 +83,7 @@ typedef struct rrdresult {
         long resampling_group;
         calculated_number resampling_divisor;
 
-        void *(*grouping_create)(struct rrdresult *r);
+        void (*grouping_create)(struct rrdresult *r);
         void (*grouping_reset)(struct rrdresult *r);
         void (*grouping_free)(struct rrdresult *r);
         void (*grouping_add)(struct rrdresult *r, calculated_number value);
@@ -100,16 +102,17 @@ typedef struct rrdresult {
 #define rrdr_rows(r) ((r)->rows)
 
 #include "database/rrd.h"
-extern void rrdr_free(RRDR *r);
-extern RRDR *rrdr_create(struct rrdset *st, long n, struct context_param *context_param_list);
+extern void rrdr_free(ONEWAYALLOC *owa, RRDR *r);
+extern RRDR *rrdr_create(ONEWAYALLOC *owa, struct rrdset *st, long n, struct context_param *context_param_list);
 
 #include "../web_api_v1.h"
 #include "web/api/queries/query.h"
 
 extern RRDR *rrd2rrdr(
+    ONEWAYALLOC *owa,
     RRDSET *st, long points_requested, long long after_requested, long long before_requested,
     RRDR_GROUPING group_method, long resampling_time_requested, RRDR_OPTIONS options, const char *dimensions,
-    struct context_param *context_param_list);
+    struct context_param *context_param_list, int timeout);
 
 #include "query.h"
 

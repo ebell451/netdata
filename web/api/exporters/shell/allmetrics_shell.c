@@ -22,13 +22,17 @@ static inline size_t shell_name_copy(char *d, const char *s, size_t usable) {
 
 #define SHELL_ELEMENT_MAX 100
 
-void rrd_stats_api_v1_charts_allmetrics_shell(RRDHOST *host, BUFFER *wb) {
+void rrd_stats_api_v1_charts_allmetrics_shell(RRDHOST *host, const char *filter_string, BUFFER *wb) {
     analytics_log_shell();
+    SIMPLE_PATTERN *filter = simple_pattern_create(filter_string, NULL, SIMPLE_PATTERN_EXACT);
     rrdhost_rdlock(host);
 
     // for each chart
     RRDSET *st;
     rrdset_foreach_read(st, host) {
+        if (filter && !simple_pattern_matches(filter, st->name))
+            continue;
+
         calculated_number total = 0.0;
         char chart[SHELL_ELEMENT_MAX + 1];
         shell_name_copy(chart, st->name?st->name:st->id, SHELL_ELEMENT_MAX);
@@ -88,12 +92,14 @@ void rrd_stats_api_v1_charts_allmetrics_shell(RRDHOST *host, BUFFER *wb) {
     }
 
     rrdhost_unlock(host);
+    simple_pattern_free(filter);
 }
 
 // ----------------------------------------------------------------------------
 
-void rrd_stats_api_v1_charts_allmetrics_json(RRDHOST *host, BUFFER *wb) {
+void rrd_stats_api_v1_charts_allmetrics_json(RRDHOST *host, const char *filter_string, BUFFER *wb) {
     analytics_log_json();
+    SIMPLE_PATTERN *filter = simple_pattern_create(filter_string, NULL, SIMPLE_PATTERN_EXACT);
     rrdhost_rdlock(host);
 
     buffer_strcat(wb, "{");
@@ -104,25 +110,29 @@ void rrd_stats_api_v1_charts_allmetrics_json(RRDHOST *host, BUFFER *wb) {
     // for each chart
     RRDSET *st;
     rrdset_foreach_read(st, host) {
+        if (filter && !(simple_pattern_matches(filter, st->id) || simple_pattern_matches(filter, st->name)))
+            continue;
+
         if(rrdset_is_available_for_viewers(st)) {
             rrdset_rdlock(st);
 
-            buffer_sprintf(wb, "%s\n"
-                               "\t\"%s\": {\n"
-                               "\t\t\"name\":\"%s\",\n"
-                               "\t\t\"family\":\"%s\",\n"
-                               "\t\t\"context\":\"%s\",\n"
-                               "\t\t\"units\":\"%s\",\n"
-                               "\t\t\"last_updated\": %ld,\n"
-                               "\t\t\"dimensions\": {"
-                           , chart_counter?",":""
-                           , st->id
-                           , st->name
-                           , st->family
-                           , st->context
-                           , st->units
-                           , rrdset_last_entry_t_nolock(st)
-            );
+            buffer_sprintf(
+                wb,
+                "%s\n"
+                "\t\"%s\": {\n"
+                "\t\t\"name\":\"%s\",\n"
+                "\t\t\"family\":\"%s\",\n"
+                "\t\t\"context\":\"%s\",\n"
+                "\t\t\"units\":\"%s\",\n"
+                "\t\t\"last_updated\": %"PRId64",\n"
+                "\t\t\"dimensions\": {",
+                chart_counter ? "," : "",
+                st->id,
+                st->name,
+                st->family,
+                st->context,
+                st->units,
+                (int64_t)rrdset_last_entry_t_nolock(st));
 
             chart_counter++;
             dimension_counter = 0;
@@ -131,15 +141,15 @@ void rrd_stats_api_v1_charts_allmetrics_json(RRDHOST *host, BUFFER *wb) {
             RRDDIM *rd;
             rrddim_foreach_read(rd, st) {
                 if(rd->collections_counter && !rrddim_flag_check(rd, RRDDIM_FLAG_OBSOLETE)) {
-
-                    buffer_sprintf(wb, "%s\n"
-                                       "\t\t\t\"%s\": {\n"
-                                       "\t\t\t\t\"name\": \"%s\",\n"
-                                       "\t\t\t\t\"value\": "
-                                   , dimension_counter?",":""
-                                   , rd->id
-                                   , rd->name
-                    );
+                    buffer_sprintf(
+                        wb,
+                        "%s\n"
+                        "\t\t\t\"%s\": {\n"
+                        "\t\t\t\t\"name\": \"%s\",\n"
+                        "\t\t\t\t\"value\": ",
+                        dimension_counter ? "," : "",
+                        rd->id,
+                        rd->name);
 
                     if(isnan(rd->last_stored_value))
                         buffer_strcat(wb, "null");
@@ -159,5 +169,6 @@ void rrd_stats_api_v1_charts_allmetrics_json(RRDHOST *host, BUFFER *wb) {
 
     buffer_strcat(wb, "\n}");
     rrdhost_unlock(host);
+    simple_pattern_free(filter);
 }
 

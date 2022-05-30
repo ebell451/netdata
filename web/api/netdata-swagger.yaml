@@ -2,7 +2,7 @@ openapi: 3.0.0
 info:
   title: Netdata API
   description: Real-time performance and health monitoring.
-  version: 1.11.1_rolling
+  version: 1.33.1
 paths:
   /info:
     get:
@@ -14,6 +14,7 @@ paths:
         * list of hosts mirrored (includes itself)
         * Operating System, Virtualization, K8s nodes and Container technology information
         * List of active collector plugins and modules
+        * Streaming information
         * number of alarms in the host
           * number of alarms in normal state
           * number of alarms in warning state
@@ -169,6 +170,24 @@ paths:
             type: number
             format: integer
             default: 20
+        - name: chart_label_key
+          in: query
+          description: Specify the chart label keys that need to match for context queries as comma separated values.
+            At least one matching key is needed to match the corresponding chart.
+          required: false
+          allowEmptyValue: false
+          schema:
+            type: string
+            format: key1,key2,key3
+        - name: chart_labels_filter
+          in: query
+          description: Specify the chart label keys and values to match for context queries. All keys/values need to
+            match for the chart to be included in the query. The labels are specified as key1:value1,key2:value2
+          required: false
+          allowEmptyValue: false
+          schema:
+            type: string
+            format: key1:value1,key2:value2,key3:value3
         - name: group
           in: query
           description: The grouping method. If multiple collected values are to be grouped
@@ -195,6 +214,16 @@ paths:
           description: The grouping number of seconds. This is used in conjunction with
             group=average to change the units of metrics (ie when the data is
             per-second, setting gtime=60 will turn them to per-minute).
+          required: false
+          allowEmptyValue: false
+          schema:
+            type: number
+            format: integer
+            default: 0
+        - name: timeout
+          in: query
+          description: Specify a timeout value in milliseconds after which the agent will
+            abort the query and return a 503 error. A value of 0 indicates no timeout.
           required: false
           allowEmptyValue: false
           schema:
@@ -564,6 +593,13 @@ paths:
               - prometheus_all_hosts
               - json
             default: shell
+        - name: filter
+          in: query
+          description: Allows to filter charts out using simple patterns.
+          required: false
+          schema:
+            type: string
+            format: any text
         - name: variables
           in: query
           description: When enabled, netdata will expose various system
@@ -709,7 +745,7 @@ paths:
         state WARNING or CRITICAL are returned. By passing "?all", all the
         enabled alarms are returned.
         This option output differs from `/alarms` in the number of variables delivered. This endpoint gives
-        to user `id`, `value` and alarm `status`.
+        to user `id`, `value`, `last_updated` time, and alarm `status`.
       parameters:
         - name: all
           in: query
@@ -865,6 +901,18 @@ paths:
           description: A plain text response based on the result of the command.
         "403":
           description: Bearer authentication error.
+  /aclk:
+    get:
+      summary: Get information about current ACLK state
+      description: aclk endpoint returns detailed information
+        about current state of ACLK (Agent to Cloud communication).
+      responses:
+        "200":
+          description: JSON object with ACLK information.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/aclk_state"
 servers:
   - url: https://registry.my-netdata.io/api/v1
   - url: http://registry.my-netdata.io/api/v1
@@ -972,6 +1020,10 @@ components:
           type: string
           description: Container technology detection method.
           example: dockerenv
+        stream_compression:
+          type: boolean
+          description: Stream transmission compression method.
+          example: true
         labels:
           type: object
           description: List of host labels.
@@ -1598,6 +1650,9 @@ components:
                 type: integer
               value:
                 type: integer
+              last_updated:
+                type: integer
+                format: int32
               status:
                 type: string
                 enum:
@@ -1609,3 +1664,35 @@ components:
                   - WARNING
                   - CRITICAL
                   - UNKNOWN
+    aclk_state:
+      type: object
+      properties:
+        aclk-available:
+          type: string
+          description: Describes whether this agent is capable of connection to the Cloud.
+            False means agent has been built without ACLK component either on purpose (user choice) or due to missing dependency.
+        aclk-version:
+          type: integer
+          description: Describes which ACLK version is currently used.
+        protocols-supported:
+          type: array
+          description: List of supported protocols for communication with Cloud.
+          items:
+            type: string
+        agent-claimed:
+          type: boolean
+          description: Informs whether this agent has been added to a space in the cloud (User has to perform claiming).
+            If false (user didn't perform claiming) agent will never attempt any cloud connection.
+        claimed_id:
+          type: string
+          format: uuid
+          description: Unique ID this agent uses to identify when connecting to cloud
+        online:
+          type: boolean
+          description: Informs if this agent was connected to the cloud at the time this request has been processed.
+        used-cloud-protocol:
+          type: string
+          description: Informs which protocol is used to communicate with cloud
+          enum:
+            - Old
+            - New

@@ -36,7 +36,7 @@ inline int config_isspace(char c)
 }
 
 // split a text into words, respecting quotes
-static inline int quoted_strings_splitter(char *str, char **words, int max_words, int (*custom_isspace)(char), char *recover_input, char **recover_location, int max_recover)
+inline int quoted_strings_splitter(char *str, char **words, int max_words, int (*custom_isspace)(char), char *recover_input, char **recover_location, int max_recover)
 {
     char *s = str, quote = 0;
     int i = 0, j, rec = 0;
@@ -127,7 +127,7 @@ inline int pluginsd_initialize_plugin_directories()
     // Get the configuration entry
     if (likely(!plugins_dir_list)) {
         snprintfz(plugins_dirs, FILENAME_MAX * 2, "\"%s\" \"%s/custom-plugins.d\"", PLUGINS_DIR, CONFIG_DIR);
-        plugins_dir_list = strdupz(config_get(CONFIG_SECTION_GLOBAL, "plugins directory", plugins_dirs));
+        plugins_dir_list = strdupz(config_get(CONFIG_SECTION_DIRECTORIES, "plugins", plugins_dirs));
     }
 
     // Parse it and store it to plugin directories
@@ -230,6 +230,8 @@ static void pluginsd_worker_thread_handle_error(struct plugind *cd, int worker_r
 
 void *pluginsd_worker_thread(void *arg)
 {
+    worker_register("PLUGINSD");
+
     netdata_thread_cleanup_push(pluginsd_worker_thread_cleanup, arg);
 
     struct plugind *cd = (struct plugind *)arg;
@@ -260,6 +262,7 @@ void *pluginsd_worker_thread(void *arg)
         if (unlikely(!cd->enabled))
             break;
     }
+    worker_unregister();
 
     netdata_thread_cleanup_pop(1);
     return NULL;
@@ -281,6 +284,8 @@ static void pluginsd_main_cleanup(void *data)
 
     info("cleanup completed.");
     static_thread->enabled = NETDATA_MAIN_THREAD_EXITED;
+
+    worker_unregister();
 }
 
 void *pluginsd_main(void *ptr)

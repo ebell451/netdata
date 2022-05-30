@@ -109,7 +109,7 @@ static inline int rrdcalctemplate_add_template_from_config(RRDHOST *host, RRDCAL
                         && !strcmp(t->name, rt->name)
                         && !strcmp(t->family_match?t->family_match:"*", rt->family_match?rt->family_match:"*")
             )) {
-                error("Health configuration template '%s' already exists for host '%s'.", rt->name, host->hostname);
+                info("Health configuration template '%s' already exists for host '%s'.", rt->name, host->hostname);
                 return 0;
             }
         }
@@ -127,7 +127,7 @@ static inline int rrdcalctemplate_add_template_from_config(RRDHOST *host, RRDCAL
                         && !strcmp(t->name, rt->name)
                         && !strcmp(t->family_match?t->family_match:"*", rt->family_match?rt->family_match:"*")
             )) {
-                error("Health configuration template '%s' already exists for host '%s'.", rt->name, host->hostname);
+                info("Health configuration template '%s' already exists for host '%s'.", rt->name, host->hostname);
                 return 0;
             }
         }
@@ -433,6 +433,9 @@ static inline int health_parse_db_lookup(
         else if(!strcasecmp(key, "unaligned")) {
             *options |= RRDR_OPTION_NOT_ALIGNED;
         }
+        else if(!strcasecmp(key, "anomaly-bit")) {
+            *options |= RRDR_OPTION_ANOMALY_BIT;
+        }
         else if(!strcasecmp(key, "match-ids") || !strcasecmp(key, "match_ids")) {
             *options |= RRDR_OPTION_MATCH_IDS;
         }
@@ -485,10 +488,11 @@ char *health_edit_command_from_source(const char *source)
         snprintfz(
             buffer,
             FILENAME_MAX,
-            "sudo %s/edit-config health.d/%s=%s",
+            "sudo %s/edit-config health.d/%s=%s=%s",
             netdata_configured_user_config_dir,
             file_no_path + 1,
-            temp);
+            temp,
+            localhost->registry_hostname);
     } else
         buffer[0] = '\0';
 
@@ -537,6 +541,7 @@ static inline void alert_config_free(struct alert_config *cfg)
     freez(cfg);
 }
 
+int sql_store_hashes = 1;
 static int health_readfile(const char *filename, void *data) {
     RRDHOST *host = (RRDHOST *)data;
 
@@ -661,17 +666,15 @@ static int health_readfile(const char *filename, void *data) {
 
         if(hash == hash_alarm && !strcasecmp(key, HEALTH_ALARM_KEY)) {
             if(rc) {
-                if(ignore_this || !alert_hash_and_store_config(rc->config_hash_id, alert_cfg) || !rrdcalc_add_alarm_from_config(host, rc)) {
+                if(!alert_hash_and_store_config(rc->config_hash_id, alert_cfg, sql_store_hashes) || ignore_this || !rrdcalc_add_alarm_from_config(host, rc)) {
                     rrdcalc_free(rc);
-                    alert_config_free(alert_cfg);
                 }
                // health_add_alarms_loop(host, rc, ignore_this) ;
             }
 
             if(rt) {
-                if (ignore_this || !alert_hash_and_store_config(rt->config_hash_id, alert_cfg) || !rrdcalctemplate_add_template_from_config(host, rt)) {
+                if (!alert_hash_and_store_config(rt->config_hash_id, alert_cfg, sql_store_hashes) || ignore_this || !rrdcalctemplate_add_template_from_config(host, rt)) {
                     rrdcalctemplate_free(rt);
-                    alert_config_free(alert_cfg);
                 }
                 rt = NULL;
             }
@@ -689,6 +692,8 @@ static int health_readfile(const char *filename, void *data) {
             rc->old_status = RRDCALC_STATUS_UNINITIALIZED;
             rc->warn_repeat_every = host->health_default_warn_repeat_every;
             rc->crit_repeat_every = host->health_default_crit_repeat_every;
+            if (alert_cfg)
+                alert_config_free(alert_cfg);
             alert_cfg = callocz(1, sizeof(struct alert_config));
 
             if(rrdvar_fix_name(rc->name))
@@ -700,18 +705,16 @@ static int health_readfile(const char *filename, void *data) {
         else if(hash == hash_template && !strcasecmp(key, HEALTH_TEMPLATE_KEY)) {
             if(rc) {
 //                health_add_alarms_loop(host, rc, ignore_this) ;
-                if(ignore_this || !alert_hash_and_store_config(rc->config_hash_id, alert_cfg) || !rrdcalc_add_alarm_from_config(host, rc)) {
+                if(!alert_hash_and_store_config(rc->config_hash_id, alert_cfg, sql_store_hashes) || ignore_this || !rrdcalc_add_alarm_from_config(host, rc)) {
                     rrdcalc_free(rc);
-                    alert_config_free(alert_cfg);
                 }
 
                 rc = NULL;
             }
 
             if(rt) {
-                if(ignore_this || !alert_hash_and_store_config(rt->config_hash_id, alert_cfg) || !rrdcalctemplate_add_template_from_config(host, rt)) {
+                if(!alert_hash_and_store_config(rt->config_hash_id, alert_cfg, sql_store_hashes) || ignore_this || !rrdcalctemplate_add_template_from_config(host, rt)) {
                     rrdcalctemplate_free(rt);
-                    alert_config_free(alert_cfg);
                 }
             }
 
@@ -724,6 +727,8 @@ static int health_readfile(const char *filename, void *data) {
             rt->delay_multiplier = 1.0;
             rt->warn_repeat_every = host->health_default_warn_repeat_every;
             rt->crit_repeat_every = host->health_default_crit_repeat_every;
+            if (alert_cfg)
+                alert_config_free(alert_cfg);
             alert_cfg = callocz(1, sizeof(struct alert_config));
 
             if(rrdvar_fix_name(rt->name))
@@ -1224,13 +1229,13 @@ static int health_readfile(const char *filename, void *data) {
 
     if(rc) {
         //health_add_alarms_loop(host, rc, ignore_this) ;
-        if(ignore_this || !alert_hash_and_store_config(rc->config_hash_id, alert_cfg) || !rrdcalc_add_alarm_from_config(host, rc)) {
+        if(!alert_hash_and_store_config(rc->config_hash_id, alert_cfg, sql_store_hashes) || ignore_this || !rrdcalc_add_alarm_from_config(host, rc)) {
             rrdcalc_free(rc);
         }
     }
 
     if(rt) {
-        if(ignore_this || !alert_hash_and_store_config(rt->config_hash_id, alert_cfg) || !rrdcalctemplate_add_template_from_config(host, rt)) {
+        if(!alert_hash_and_store_config(rt->config_hash_id, alert_cfg, sql_store_hashes) || ignore_this || !rrdcalctemplate_add_template_from_config(host, rt)) {
             rrdcalctemplate_free(rt);
         }
     }
@@ -1240,6 +1245,11 @@ static int health_readfile(const char *filename, void *data) {
 
     fclose(fp);
     return 1;
+}
+
+void sql_refresh_hashes(void)
+{
+    sql_store_hashes = 1;
 }
 
 void health_readdir(RRDHOST *host, const char *user_path, const char *stock_path, const char *subpath) {
@@ -1257,4 +1267,5 @@ void health_readdir(RRDHOST *host, const char *user_path, const char *stock_path
     }
 
     recursive_config_double_dir_load(user_path, stock_path, subpath, health_readfile, (void *) host, 0);
+    sql_store_hashes = 0;
 }

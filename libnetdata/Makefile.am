@@ -8,6 +8,7 @@ SUBDIRS = \
     avl \
     buffer \
     clocks \
+    completion \
     config \
     dictionary \
     ebpf \
@@ -16,6 +17,7 @@ SUBDIRS = \
     health \
     locks \
     log \
+    onewayalloc \
     popen \
     procfile \
     simple_pattern \
@@ -24,6 +26,7 @@ SUBDIRS = \
     storage_number \
     threads \
     url \
+    worker_utilization \
     tests \
     $(NULL)
 

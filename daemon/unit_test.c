@@ -97,7 +97,7 @@ static int check_rrdcalc_comparisons(void) {
 
 int check_storage_number(calculated_number n, int debug) {
     char buffer[100];
-    uint32_t flags = SN_EXISTS;
+    uint32_t flags = SN_DEFAULT_FLAGS;
 
     storage_number s = pack_storage_number(n, flags);
     calculated_number d = unpack_storage_number(s);
@@ -150,7 +150,7 @@ calculated_number storage_number_min(calculated_number n) {
     do {
         last = n;
         n /= 2.0;
-        storage_number t = pack_storage_number(n, SN_EXISTS);
+        storage_number t = pack_storage_number(n, SN_DEFAULT_FLAGS);
         r = unpack_storage_number(t);
     } while(r != 0.0 && r != last);
 
@@ -263,7 +263,7 @@ void benchmark_storage_number(int loop, int multiplier) {
             n *= multiplier;
             if(n > storage_number_positive_max) n = storage_number_positive_min;
 
-            s = pack_storage_number(n, SN_EXISTS);
+            s = pack_storage_number(n, SN_DEFAULT_FLAGS);
             d = unpack_storage_number(s);
             print_calculated_number(buffer, d);
         }
@@ -289,25 +289,12 @@ void benchmark_storage_number(int loop, int multiplier) {
 }
 
 static int check_storage_number_exists() {
-    uint32_t flags;
-
-
-    for(flags = 0; flags < 7 ; flags++) {
-        if(get_storage_number_flags(flags << 24) != flags << 24) {
-            fprintf(stderr, "Flag 0x%08x is not checked correctly. It became 0x%08x\n", flags << 24, get_storage_number_flags(flags << 24));
-            return 1;
-        }
-    }
-
-    flags = SN_EXISTS;
+    uint32_t flags = SN_DEFAULT_FLAGS;
     calculated_number n = 0.0;
 
     storage_number s = pack_storage_number(n, flags);
     calculated_number d = unpack_storage_number(s);
-    if(get_storage_number_flags(s) != flags) {
-        fprintf(stderr, "Wrong flags. Given %08x, Got %08x!\n", flags, get_storage_number_flags(s));
-        return 1;
-    }
+
     if(n != d) {
         fprintf(stderr, "Wrong number returned. Expected " CALCULATED_NUMBER_FORMAT ", returned " CALCULATED_NUMBER_FORMAT "!\n", n, d);
         return 1;
@@ -414,6 +401,44 @@ int unit_test_buffer() {
 
     fprintf(stderr, "buffer_sprintf() works as expected.\n");
     buffer_free(wb);
+    return 0;
+}
+
+int unit_test_static_threads() {
+    struct netdata_static_thread *static_threads = static_threads_get();
+
+    /*
+     * make sure enough static threads have been registered
+     */
+    if (!static_threads) {
+        fprintf(stderr, "empty static_threads array\n");
+        return 1;
+    }
+
+    int n;
+    for (n = 0; static_threads[n].start_routine != NULL; n++) {}
+
+    if (n < 2) {
+        fprintf(stderr, "only %d static threads registered", n);
+        freez(static_threads);
+        return 1;
+    }
+
+    /*
+     * verify that each thread's start routine is unique.
+     */
+    for (int i = 0; i != n - 1; i++) {
+        for (int j = i + 1; j != n; j++) {
+            if (static_threads[i].start_routine != static_threads[j].start_routine)
+                continue;
+
+            fprintf(stderr, "Found duplicate threads with name: %s\n", static_threads[i].name);
+            freez(static_threads);
+            return 1;
+        }
+    }
+
+    freez(static_threads);
     return 0;
 }
 
@@ -1192,11 +1217,11 @@ int run_test(struct test *test)
     unsigned long max = (st->counter < test->result_entries)?st->counter:test->result_entries;
     for(c = 0 ; c < max ; c++) {
         calculated_number v = unpack_storage_number(rd->values[c]);
-        calculated_number n = unpack_storage_number(pack_storage_number(test->results[c], SN_EXISTS));
+        calculated_number n = unpack_storage_number(pack_storage_number(test->results[c], SN_DEFAULT_FLAGS));
         int same = (calculated_number_round(v * 10000000.0) == calculated_number_round(n * 10000000.0))?1:0;
-        fprintf(stderr, "    %s/%s: checking position %lu (at %lu secs), expecting value " CALCULATED_NUMBER_FORMAT ", found " CALCULATED_NUMBER_FORMAT ", %s\n",
+        fprintf(stderr, "    %s/%s: checking position %lu (at %"PRId64" secs), expecting value " CALCULATED_NUMBER_FORMAT ", found " CALCULATED_NUMBER_FORMAT ", %s\n",
             test->name, rd->name, c+1,
-            (rrdset_first_entry_t(st) + c * st->update_every) - time_start,
+            (int64_t)((rrdset_first_entry_t(st) + c * st->update_every) - time_start),
             n, v, (same)?"OK":"### E R R O R ###");
 
         if(!same) errors++;
@@ -1205,9 +1230,9 @@ int run_test(struct test *test)
             v = unpack_storage_number(rd2->values[c]);
             n = test->results2[c];
             same = (calculated_number_round(v * 10000000.0) == calculated_number_round(n * 10000000.0))?1:0;
-            fprintf(stderr, "    %s/%s: checking position %lu (at %lu secs), expecting value " CALCULATED_NUMBER_FORMAT ", found " CALCULATED_NUMBER_FORMAT ", %s\n",
+            fprintf(stderr, "    %s/%s: checking position %lu (at %"PRId64" secs), expecting value " CALCULATED_NUMBER_FORMAT ", found " CALCULATED_NUMBER_FORMAT ", %s\n",
                 test->name, rd2->name, c+1,
-                (rrdset_first_entry_t(st) + c * st->update_every) - time_start,
+                (int64_t)((rrdset_first_entry_t(st) + c * st->update_every) - time_start),
                 n, v, (same)?"OK":"### E R R O R ###");
             if(!same) errors++;
         }
@@ -1534,7 +1559,7 @@ static RRDHOST *dbengine_rrdhost_find_or_create(char *name)
             , netdata_configured_timezone
             , netdata_configured_abbrev_timezone
             , netdata_configured_utc_offset
-            , config_get(CONFIG_SECTION_BACKEND, "host tags", "")
+            , ""
             , program_name
             , program_version
             , default_rrd_update_every
@@ -1617,7 +1642,7 @@ static time_t test_dbengine_create_metrics(RRDSET *st[CHARTS], RRDDIM *rd[CHARTS
     collected_number next;
 
     update_every = REGION_UPDATE_EVERY[current_region];
-    time_now = time_start + update_every;
+    time_now = time_start;
     // feed it with the test data
     for (i = 0 ; i < CHARTS ; ++i) {
         for (j = 0 ; j < DIMS ; ++j) {
@@ -1628,7 +1653,7 @@ static time_t test_dbengine_create_metrics(RRDSET *st[CHARTS], RRDDIM *rd[CHARTS
         }
     }
     for (c = 0; c < REGION_POINTS[current_region] ; ++c) {
-        time_now += update_every; // time_now = start + (c + 2) * update_every
+        time_now += update_every; // time_now = start + (c + 1) * update_every
         for (i = 0 ; i < CHARTS ; ++i) {
             st[i]->usec_since_last_update = USEC_PER_SEC * update_every;
 
@@ -1660,14 +1685,14 @@ static int test_dbengine_check_metrics(RRDSET *st[CHARTS], RRDDIM *rd[CHARTS][DI
 
     // check the result
     for (c = 0; c < REGION_POINTS[current_region] ; c += QUERY_BATCH) {
-        time_now = time_start + (c + 2) * update_every;
+        time_now = time_start + (c + 1) * update_every;
         for (i = 0 ; i < CHARTS ; ++i) {
             for (j = 0; j < DIMS; ++j) {
                 rd[i][j]->state->query_ops.init(rd[i][j], &handle, time_now, time_now + QUERY_BATCH * update_every);
                 for (k = 0; k < QUERY_BATCH; ++k) {
                     last = ((collected_number)i * DIMS) * REGION_POINTS[current_region] +
                            j * REGION_POINTS[current_region] + c + k;
-                    expected = unpack_storage_number(pack_storage_number((calculated_number)last, SN_EXISTS));
+                    expected = unpack_storage_number(pack_storage_number((calculated_number)last, SN_DEFAULT_FLAGS));
 
                     n = rd[i][j]->state->query_ops.next_metric(&handle, &time_retrieved);
                     value = unpack_storage_number(n);
@@ -1705,9 +1730,10 @@ static int test_dbengine_check_rrdr(RRDSET *st[CHARTS], RRDDIM *rd[CHARTS][DIMS]
 
     errors = 0;
     update_every = REGION_UPDATE_EVERY[current_region];
-    long points = (time_end - time_start) / update_every - 1;
+    long points = (time_end - time_start) / update_every;
     for (i = 0 ; i < CHARTS ; ++i) {
-        RRDR *r = rrd2rrdr(st[i], points, time_start + update_every, time_end, RRDR_GROUPING_AVERAGE, 0, 0, NULL, NULL);
+        ONEWAYALLOC *owa = onewayalloc_create(0);
+        RRDR *r = rrd2rrdr(owa, st[i], points, time_start + update_every, time_end, RRDR_GROUPING_AVERAGE, 0, 0, NULL, NULL, 0);
         if (!r) {
             fprintf(stderr, "    DB-engine unittest %s: empty RRDR ### E R R O R ###\n", st[i]->name);
             return ++errors;
@@ -1724,8 +1750,8 @@ static int test_dbengine_check_rrdr(RRDSET *st[CHARTS], RRDDIM *rd[CHARTS][DIMS]
                     value = cn[j];
                     assert(rd[i][j] == d);
 
-                    last = i * DIMS * REGION_POINTS[current_region] + j * REGION_POINTS[current_region] + c;
-                    expected = unpack_storage_number(pack_storage_number((calculated_number)last, SN_EXISTS));
+                    last = i * DIMS * REGION_POINTS[current_region] + j * REGION_POINTS[current_region] + c + 1;
+                    expected = unpack_storage_number(pack_storage_number((calculated_number)last, SN_DEFAULT_FLAGS));
 
                     same = (calculated_number_round(value) == calculated_number_round(expected)) ? 1 : 0;
                     if(!same) {
@@ -1741,8 +1767,9 @@ static int test_dbengine_check_rrdr(RRDSET *st[CHARTS], RRDDIM *rd[CHARTS][DIMS]
                     }
                 }
             }
-            rrdr_free(r);
+            rrdr_free(owa, r);
         }
+        onewayalloc_destroy(owa);
     }
     return errors;
 }
@@ -1823,10 +1850,11 @@ int test_dbengine(void)
     current_region = 1;
     update_every = REGION_UPDATE_EVERY[current_region]; // use the maximum update_every = 3
     errors = 0;
-    long points = (time_end[REGIONS - 1] - time_start[0]) / update_every - 1; // cover all time regions with RRDR
+    long points = (time_end[REGIONS - 1] - time_start[0]) / update_every; // cover all time regions with RRDR
     long point_offset = (time_start[current_region] - time_start[0]) / update_every;
     for (i = 0 ; i < CHARTS ; ++i) {
-        RRDR *r = rrd2rrdr(st[i], points, time_start[0] + update_every, time_end[REGIONS - 1], RRDR_GROUPING_AVERAGE, 0, 0, NULL, NULL);
+        ONEWAYALLOC *owa = onewayalloc_create(0);
+        RRDR *r = rrd2rrdr(owa, st[i], points, time_start[0] + update_every, time_end[REGIONS - 1], RRDR_GROUPING_AVERAGE, 0, 0, NULL, NULL, 0);
         if (!r) {
             fprintf(stderr, "    DB-engine unittest %s: empty RRDR ### E R R O R ###\n", st[i]->name);
             ++errors;
@@ -1846,8 +1874,8 @@ int test_dbengine(void)
                     calculated_number value = cn[j];
                     assert(rd[i][j] == d);
 
-                    collected_number last = i * DIMS * REGION_POINTS[current_region] + j * REGION_POINTS[current_region] + c - point_offset;
-                    calculated_number expected = unpack_storage_number(pack_storage_number((calculated_number)last, SN_EXISTS));
+                    collected_number last = i * DIMS * REGION_POINTS[current_region] + j * REGION_POINTS[current_region] + c - point_offset + 1;
+                    calculated_number expected = unpack_storage_number(pack_storage_number((calculated_number)last, SN_DEFAULT_FLAGS));
 
                     uint8_t same = (calculated_number_round(value) == calculated_number_round(expected)) ? 1 : 0;
                     if(!same) {
@@ -1863,8 +1891,9 @@ int test_dbengine(void)
                     }
                 }
             }
-            rrdr_free(r);
+            rrdr_free(owa, r);
         }
+        onewayalloc_destroy(owa);
     }
 error_out:
     rrd_wrlock();
@@ -1930,7 +1959,7 @@ static void generate_dbengine_chart(void *arg)
 
         thread_info->rd[j] = rd[j] = rrddim_add(st, name, NULL, 1, 1, RRD_ALGORITHM_ABSOLUTE);
     }
-    complete(&thread_info->charts_initialized);
+    completion_mark_complete(&thread_info->charts_initialized);
 
     // feed it with the test data
     time_current = time_present - history_seconds;
@@ -1999,10 +2028,10 @@ void generate_dbengine_dataset(unsigned history_seconds)
         thread_info[i]->time_present = time_present;
         thread_info[i]->time_max = 0;
         thread_info[i]->done = 0;
-        init_completion(&thread_info[i]->charts_initialized);
+        completion_init(&thread_info[i]->charts_initialized);
         assert(0 == uv_thread_create(&thread_info[i]->thread, generate_dbengine_chart, thread_info[i]));
-        wait_for_completion(&thread_info[i]->charts_initialized);
-        destroy_completion(&thread_info[i]->charts_initialized);
+        completion_wait_for(&thread_info[i]->charts_initialized);
+        completion_destroy(&thread_info[i]->charts_initialized);
     }
     for (i = 0 ; i < DSET_CHARTS ; ++i) {
         assert(0 == uv_thread_join(&thread_info[i]->thread));
@@ -2076,7 +2105,7 @@ static void query_dbengine_chart(void *arg)
         ++thread_info->queries_nr;
         for (time_now = time_after ; time_now <= time_before ; time_now += update_every) {
             generatedv = generate_dbengine_chart_value(i, j, time_now);
-            expected = unpack_storage_number(pack_storage_number((calculated_number) generatedv, SN_EXISTS));
+            expected = unpack_storage_number(pack_storage_number((calculated_number) generatedv, SN_DEFAULT_FLAGS));
 
             if (unlikely(rd->state->query_ops.is_finished(&handle))) {
                 if (!thread_info->delete_old_data) { /* data validation only when we don't delete */
@@ -2161,6 +2190,7 @@ void dbengine_stress_test(unsigned TEST_DURATION_SEC, unsigned DSET_CHARTS, unsi
 
     fprintf(stderr, "Initializing localhost with hostname 'dbengine-stress-test'\n");
 
+    (void) sql_init_database(DB_CHECK_NONE, 1);
     host = dbengine_rrdhost_find_or_create("dbengine-stress-test");
     if (NULL == host)
         return;
@@ -2190,13 +2220,13 @@ void dbengine_stress_test(unsigned TEST_DURATION_SEC, unsigned DSET_CHARTS, unsi
         chart_threads[i]->time_max = 0;
         chart_threads[i]->done = 0;
         chart_threads[i]->errors = chart_threads[i]->stored_metrics_nr = 0;
-        init_completion(&chart_threads[i]->charts_initialized);
+        completion_init(&chart_threads[i]->charts_initialized);
         assert(0 == uv_thread_create(&chart_threads[i]->thread, generate_dbengine_chart, chart_threads[i]));
     }
     /* barrier so that subsequent queries can access valid chart data */
     for (i = 0 ; i < DSET_CHARTS ; ++i) {
-        wait_for_completion(&chart_threads[i]->charts_initialized);
-        destroy_completion(&chart_threads[i]->charts_initialized);
+        completion_wait_for(&chart_threads[i]->charts_initialized);
+        completion_destroy(&chart_threads[i]->charts_initialized);
     }
     sleep(RAMP_UP_SECONDS);
     /* at this point data have already began being written to the database */
@@ -2237,9 +2267,8 @@ void dbengine_stress_test(unsigned TEST_DURATION_SEC, unsigned DSET_CHARTS, unsi
     for (i = 0 ; i < DSET_CHARTS ; ++i) {
         stored_metrics_nr += chart_threads[i]->stored_metrics_nr;
     }
-    unsigned long queries_nr = 0, queried_metrics_nr = 0;
+    unsigned long queried_metrics_nr = 0;
     for (i = 0 ; i < QUERY_THREADS ; ++i) {
-        queries_nr += query_threads[i]->queries_nr;
         queried_metrics_nr += query_threads[i]->queried_metrics_nr;
     }
     fprintf(stderr, "%u metrics were stored (dataset size of %lu MiB) in %u charts by 1 writer thread per chart.\n",

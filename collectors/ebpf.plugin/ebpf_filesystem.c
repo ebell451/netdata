@@ -38,7 +38,8 @@ ebpf_filesystem_partitions_t localfs[] =
       .probe_links = NULL,
       .flags = NETDATA_FILESYSTEM_FLAG_NO_PARTITION,
       .enabled = CONFIG_BOOLEAN_YES,
-      .addresses = {.function = NULL, .addr = 0}},
+      .addresses = {.function = NULL, .addr = 0},
+      .kernels =  NETDATA_V3_10 | NETDATA_V4_14 | NETDATA_V4_16 | NETDATA_V4_18 | NETDATA_V5_4},
      {.filesystem = "xfs",
       .optional_filesystem = NULL,
       .family = "xfs",
@@ -46,7 +47,8 @@ ebpf_filesystem_partitions_t localfs[] =
       .probe_links = NULL,
       .flags = NETDATA_FILESYSTEM_FLAG_NO_PARTITION,
       .enabled = CONFIG_BOOLEAN_YES,
-      .addresses = {.function = NULL, .addr = 0}},
+      .addresses = {.function = NULL, .addr = 0},
+      .kernels =  NETDATA_V3_10 | NETDATA_V4_14 | NETDATA_V4_16 | NETDATA_V4_18 | NETDATA_V5_4},
      {.filesystem = "nfs",
       .optional_filesystem = "nfs4",
       .family = "nfs",
@@ -54,7 +56,8 @@ ebpf_filesystem_partitions_t localfs[] =
       .probe_links = NULL,
       .flags = NETDATA_FILESYSTEM_ATTR_CHARTS,
       .enabled = CONFIG_BOOLEAN_YES,
-      .addresses = {.function = NULL, .addr = 0}},
+      .addresses = {.function = NULL, .addr = 0},
+      .kernels =  NETDATA_V3_10 | NETDATA_V4_14 | NETDATA_V4_16 | NETDATA_V4_18 | NETDATA_V5_4},
      {.filesystem = "zfs",
       .optional_filesystem = NULL,
       .family = "zfs",
@@ -62,7 +65,8 @@ ebpf_filesystem_partitions_t localfs[] =
       .probe_links = NULL,
       .flags = NETDATA_FILESYSTEM_FLAG_NO_PARTITION,
       .enabled = CONFIG_BOOLEAN_YES,
-      .addresses = {.function = NULL, .addr = 0}},
+      .addresses = {.function = NULL, .addr = 0},
+      .kernels =  NETDATA_V3_10 | NETDATA_V4_14 | NETDATA_V4_16 | NETDATA_V4_18 | NETDATA_V5_4},
      {.filesystem = "btrfs",
       .optional_filesystem = NULL,
       .family = "btrfs",
@@ -70,7 +74,8 @@ ebpf_filesystem_partitions_t localfs[] =
       .probe_links = NULL,
       .flags = NETDATA_FILESYSTEM_FILL_ADDRESS_TABLE,
       .enabled = CONFIG_BOOLEAN_YES,
-      .addresses = {.function = "btrfs_file_operations", .addr = 0}},
+      .addresses = {.function = "btrfs_file_operations", .addr = 0},
+      .kernels =  NETDATA_V3_10 | NETDATA_V4_14 | NETDATA_V4_16 | NETDATA_V4_18 | NETDATA_V5_4 | NETDATA_V5_10},
      {.filesystem = NULL,
       .optional_filesystem = NULL,
       .family = NULL,
@@ -78,7 +83,8 @@ ebpf_filesystem_partitions_t localfs[] =
       .probe_links = NULL,
       .flags = NETDATA_FILESYSTEM_FLAG_NO_PARTITION,
       .enabled = CONFIG_BOOLEAN_YES,
-      .addresses = {.function = NULL, .addr = 0}}};
+      .addresses = {.function = NULL, .addr = 0},
+      .kernels = 0}};
 
 struct netdata_static_thread filesystem_threads = {"EBPF FS READ",
                                                    NULL, NULL, 1, NULL,
@@ -101,8 +107,10 @@ static netdata_idx_t *filesystem_hash_values = NULL;
  * Create Filesystem chart
  *
  * Create latency charts
+ *
+ * @param update_every value to overwrite the update frequency set by the server.
  */
-static void ebpf_obsolete_fs_charts()
+static void ebpf_obsolete_fs_charts(int update_every)
 {
     int i;
     uint32_t test = NETDATA_FILESYSTEM_FLAG_CHART_CREATED | NETDATA_FILESYSTEM_REMOVE_CHARTS;
@@ -115,20 +123,21 @@ static void ebpf_obsolete_fs_charts()
             ebpf_write_chart_obsolete(NETDATA_FILESYSTEM_FAMILY, efp->hread.name,
                                       efp->hread.title,
                                       EBPF_COMMON_DIMENSION_CALL, efp->family_name,
-                                      NULL, NETDATA_EBPF_CHART_TYPE_STACKED, efp->hread.order);
+                                      NULL, NETDATA_EBPF_CHART_TYPE_STACKED, efp->hread.order, update_every);
 
             ebpf_write_chart_obsolete(NETDATA_FILESYSTEM_FAMILY, efp->hwrite.name,
                                       efp->hwrite.title,
                                       EBPF_COMMON_DIMENSION_CALL, efp->family_name,
-                                      NULL, NETDATA_EBPF_CHART_TYPE_STACKED, efp->hwrite.order);
+                                      NULL, NETDATA_EBPF_CHART_TYPE_STACKED, efp->hwrite.order, update_every);
 
             ebpf_write_chart_obsolete(NETDATA_FILESYSTEM_FAMILY, efp->hopen.name, efp->hopen.title,
                                       EBPF_COMMON_DIMENSION_CALL, efp->family_name,
-                                      NULL, NETDATA_EBPF_CHART_TYPE_STACKED, efp->hopen.order);
+                                      NULL, NETDATA_EBPF_CHART_TYPE_STACKED, efp->hopen.order, update_every);
 
             ebpf_write_chart_obsolete(NETDATA_FILESYSTEM_FAMILY, efp->hadditional.name, efp->hadditional.title,
                                       EBPF_COMMON_DIMENSION_CALL, efp->family_name,
-                                      NULL, NETDATA_EBPF_CHART_TYPE_STACKED, efp->hadditional.order);
+                                      NULL, NETDATA_EBPF_CHART_TYPE_STACKED, efp->hadditional.order,
+                                      update_every);
         }
         efp->flags = flags;
     }
@@ -138,8 +147,10 @@ static void ebpf_obsolete_fs_charts()
  * Create Filesystem chart
  *
  * Create latency charts
+ *
+ * @param update_every value to overwrite the update frequency set by the server.
  */
-static void ebpf_create_fs_charts()
+static void ebpf_create_fs_charts(int update_every)
 {
     static int order = NETDATA_CHART_PRIO_EBPF_FILESYSTEM_CHARTS;
     char chart_name[64], title[256], family[64];
@@ -162,7 +173,7 @@ static void ebpf_create_fs_charts()
                               EBPF_COMMON_DIMENSION_CALL, family,
                               NULL, NETDATA_EBPF_CHART_TYPE_STACKED, order, ebpf_create_global_dimension,
                               filesystem_publish_aggregated, NETDATA_EBPF_HIST_MAX_BINS,
-                              NETDATA_EBPF_MODULE_NAME_FILESYSTEM);
+                              update_every, NETDATA_EBPF_MODULE_NAME_FILESYSTEM);
             order++;
 
             snprintfz(title, 255, "%s latency for each write request.", efp->filesystem);
@@ -175,7 +186,7 @@ static void ebpf_create_fs_charts()
                               EBPF_COMMON_DIMENSION_CALL, family,
                               NULL, NETDATA_EBPF_CHART_TYPE_STACKED, order, ebpf_create_global_dimension,
                               filesystem_publish_aggregated, NETDATA_EBPF_HIST_MAX_BINS,
-                              NETDATA_EBPF_MODULE_NAME_FILESYSTEM);
+                              update_every, NETDATA_EBPF_MODULE_NAME_FILESYSTEM);
             order++;
 
             snprintfz(title, 255, "%s latency for each open request.", efp->filesystem);
@@ -188,7 +199,7 @@ static void ebpf_create_fs_charts()
                               EBPF_COMMON_DIMENSION_CALL, family,
                               NULL, NETDATA_EBPF_CHART_TYPE_STACKED, order, ebpf_create_global_dimension,
                               filesystem_publish_aggregated, NETDATA_EBPF_HIST_MAX_BINS,
-                              NETDATA_EBPF_MODULE_NAME_FILESYSTEM);
+                              update_every, NETDATA_EBPF_MODULE_NAME_FILESYSTEM);
             order++;
 
             char *type = (efp->flags & NETDATA_FILESYSTEM_ATTR_CHARTS) ? "attribute" : "sync";
@@ -201,7 +212,7 @@ static void ebpf_create_fs_charts()
                               EBPF_COMMON_DIMENSION_CALL, family,
                               NULL, NETDATA_EBPF_CHART_TYPE_STACKED, order, ebpf_create_global_dimension,
                               filesystem_publish_aggregated, NETDATA_EBPF_HIST_MAX_BINS,
-                              NETDATA_EBPF_MODULE_NAME_FILESYSTEM);
+                              update_every, NETDATA_EBPF_MODULE_NAME_FILESYSTEM);
             order++;
             efp->flags |= NETDATA_FILESYSTEM_FLAG_CHART_CREATED;
         }
@@ -219,13 +230,16 @@ int ebpf_filesystem_initialize_ebpf_data(ebpf_module_t *em)
 {
     int i;
     const char *saved_name = em->thread_name;
+    uint64_t kernels = em->kernels;
     for (i = 0; localfs[i].filesystem; i++) {
         ebpf_filesystem_partitions_t *efp = &localfs[i];
         if (!efp->probe_links && efp->flags & NETDATA_FILESYSTEM_LOAD_EBPF_PROGRAM) {
             em->thread_name = efp->filesystem;
-            efp->probe_links = ebpf_load_program(ebpf_plugin_dir, em, kernel_string, &efp->objects);
+            em->kernels = efp->kernels;
+            efp->probe_links = ebpf_load_program(ebpf_plugin_dir, em, running_on_kernel, isrh, &efp->objects);
             if (!efp->probe_links) {
                 em->thread_name = saved_name;
+                em->kernels = kernels;
                 return -1;
             }
             efp->flags |= NETDATA_FILESYSTEM_FLAG_HAS_PARTITION;
@@ -238,6 +252,7 @@ int ebpf_filesystem_initialize_ebpf_data(ebpf_module_t *em)
         efp->flags &= ~NETDATA_FILESYSTEM_LOAD_EBPF_PROGRAM;
     }
     em->thread_name = saved_name;
+    em->kernels = kernels;
 
     if (!dimensions) {
         dimensions = ebpf_fill_histogram_dimension(NETDATA_EBPF_HIST_MAX_BINS);
@@ -312,12 +327,12 @@ static int ebpf_read_local_partitions()
  */
 static int ebpf_update_partitions(ebpf_module_t *em)
 {
-    static time_t update_time = 0;
+    static time_t update_every = 0;
     time_t curr = now_realtime_sec();
-    if (curr < update_time)
+    if (curr < update_every)
         return 0;
 
-    update_time = curr + 5 * em->update_time;
+    update_every = curr + 5 * em->update_every;
     if (!ebpf_read_local_partitions()) {
         em->optional = -1;
         return -1;
@@ -505,13 +520,14 @@ void *ebpf_filesystem_read_hash(void *ptr)
 
     heartbeat_t hb;
     heartbeat_init(&hb);
-    usec_t step = NETDATA_FILESYSTEM_READ_SLEEP_MS * em->update_time;
+    usec_t step = NETDATA_FILESYSTEM_READ_SLEEP_MS * em->update_every;
+    int update_every = em->update_every;
     while (!close_ebpf_plugin) {
         usec_t dt = heartbeat_next(&hb, step);
         (void)dt;
 
         (void) ebpf_update_partitions(em);
-        ebpf_obsolete_fs_charts();
+        ebpf_obsolete_fs_charts(update_every);
 
         // No more partitions, it is not necessary to read tables
         if (em->optional)
@@ -564,17 +580,23 @@ static void filesystem_collector(ebpf_module_t *em)
     netdata_thread_create(filesystem_threads.thread, filesystem_threads.name,
                           NETDATA_THREAD_OPTION_JOINABLE, ebpf_filesystem_read_hash, em);
 
+    int update_every = em->update_every;
+    int counter = update_every - 1;
     while (!close_ebpf_plugin || em->optional) {
         pthread_mutex_lock(&collect_data_mutex);
         pthread_cond_wait(&collect_data_cond_var, &collect_data_mutex);
 
-        pthread_mutex_lock(&lock);
+        if (++counter == update_every) {
+            counter = 0;
+            pthread_mutex_lock(&lock);
 
-        ebpf_create_fs_charts();
-        ebpf_histogram_send_data();
+            ebpf_create_fs_charts(update_every);
+            ebpf_histogram_send_data();
+
+            pthread_mutex_unlock(&lock);
+        }
 
         pthread_mutex_unlock(&collect_data_mutex);
-        pthread_mutex_unlock(&lock);
     }
 }
 
@@ -628,7 +650,7 @@ void *ebpf_filesystem_thread(void *ptr)
         if (em->optional)
             info("Netdata cannot monitor the filesystems used on this host.");
 
-        em->enabled = 0;
+        em->enabled = CONFIG_BOOLEAN_NO;
         goto endfilesystem;
     }
 
@@ -638,12 +660,16 @@ void *ebpf_filesystem_thread(void *ptr)
                        algorithms, NETDATA_EBPF_HIST_MAX_BINS);
 
     pthread_mutex_lock(&lock);
-    ebpf_create_fs_charts();
+    ebpf_create_fs_charts(em->update_every);
+    ebpf_update_stats(&plugin_statistics, em);
     pthread_mutex_unlock(&lock);
 
     filesystem_collector(em);
 
 endfilesystem:
+    if (!em->enabled)
+        ebpf_update_disabled_plugin_stats(em);
+
     netdata_thread_cleanup_pop(1);
     return NULL;
 }
